@@ -9,6 +9,24 @@ import { Roles } from '../auth/roles.decorator';
 export class UplinkMessagesController {
   constructor(private readonly service: UplinkMessagesService) {}
 
+  @Get('stats/hourly')
+  @Roles('viewer')
+  statsHourly() {
+    return this.service.statsHourly();
+  }
+
+  @Get('stats/gateway')
+  @Roles('viewer')
+  statsGateway() {
+    return this.service.statsGateway();
+  }
+
+  @Get('stats/summary')
+  @Roles('viewer')
+  statsSummary() {
+    return this.service.statsSummary();
+  }
+
   @Get()
   @Roles('viewer')
   findAll(
@@ -16,12 +34,14 @@ export class UplinkMessagesController {
     @Query('limit') limit?: string,
     @Query('deviceEUI') deviceEUI?: string,
     @Query('applicationId') applicationId?: string,
+    @Query('gatewayEUI') gatewayEUI?: string,
   ) {
     return this.service.findAll(
       page ? parseInt(page, 10) : 1,
       limit ? parseInt(limit, 10) : 50,
       deviceEUI,
       applicationId,
+      gatewayEUI,
     );
   }
 
