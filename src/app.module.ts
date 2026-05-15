@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ApplicationsModule } from './applications/applications.module';
@@ -8,6 +9,9 @@ import { GatewaysModule } from './gateways/gateways.module';
 import { EndDevicesModule } from './end-devices/end-devices.module';
 import { CompaniesModule } from './companies/companies.module';
 import { IntegrationsModule } from './integrations/integrations.module';
+import { UplinkMessagesModule } from './uplinks/uplinks.module';
+import { MqttModule } from './mqtt/mqtt.module';
+import { WebsocketModule } from './websocket/websocket.module';
 
 @Module({
   imports: [
@@ -17,6 +21,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
       useFactory: (config: ConfigService) => ({ uri: config.get<string>('MONGODB_URI') }),
       inject: [ConfigService],
     }),
+    EventEmitterModule.forRoot(),
     AuthModule,
     UsersModule,
     ApplicationsModule,
@@ -24,6 +29,9 @@ import { IntegrationsModule } from './integrations/integrations.module';
     EndDevicesModule,
     CompaniesModule,
     IntegrationsModule,
+    UplinkMessagesModule,
+    MqttModule,
+    WebsocketModule,
   ],
 })
 export class AppModule {}
