@@ -10,6 +10,7 @@ export class StorageService {
 
   async getStats() {
     const db = this.connection.db;
+    if (!db) throw new Error('Database connection not established');
     const dbStats: any = await db.command({ dbStats: 1, scale: 1 });
 
     const collectionStats = await Promise.all(
