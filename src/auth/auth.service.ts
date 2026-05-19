@@ -5,6 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 
 @Injectable()
 export class AuthService {
@@ -13,6 +14,17 @@ export class AuthService {
     private jwtService: JwtService,
     private config: ConfigService,
   ) {}
+
+  async register(dto: RegisterDto) {
+    const user = await this.usersService.create({
+      name: dto.name,
+      email: dto.email,
+      company: dto.company,
+      password: dto.password,
+      role: 'viewer',
+    });
+    return this.generateTokens({ sub: user._id.toString(), email: user.email, role: user.role });
+  }
 
   async login(dto: LoginDto) {
     const user = await this.usersService.findByEmail(dto.email);

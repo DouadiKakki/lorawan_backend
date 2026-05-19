@@ -12,6 +12,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { UplinkMessagesModule } from './uplinks/uplinks.module';
 import { MqttModule } from './mqtt/mqtt.module';
 import { WebsocketModule } from './websocket/websocket.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { WebsocketModule } from './websocket/websocket.module';
     UplinkMessagesModule,
     MqttModule,
     WebsocketModule,
+    StorageModule,
   ],
 })
 export class AppModule {}
