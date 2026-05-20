@@ -25,4 +25,8 @@ export class EndDevicesService {
     const doc = await this.model.findByIdAndDelete(id).exec();
     if (!doc) throw new NotFoundException('End device not found');
   }
+
+  findByDevAddr(devAddr: string): Promise<EndDeviceDocument | null> {
+    return this.model.findOne({ devAddr: devAddr.toLowerCase() }).exec();
+  }
 }

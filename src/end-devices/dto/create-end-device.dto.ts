@@ -7,4 +7,7 @@ export class CreateEndDeviceDto {
   @IsOptional() @IsString() companyId?: string;
   @IsOptional() @IsEnum(['active', 'inactive']) status?: string;
   @IsOptional() @IsNumber() battery?: number;
+  @IsOptional() @IsString() devAddr?: string;
+  @IsOptional() @IsString() appSKey?: string;
+  @IsOptional() @IsString() nwkSKey?: string;
 }

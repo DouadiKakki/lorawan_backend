@@ -20,6 +20,9 @@ export class EndDevice {
   @Prop({ default: 0 }) battery: number;
   @Prop({ default: 0 }) rssi: number;
   @Prop() lastSeen: Date;
+  @Prop() devAddr: string;
+  @Prop() appSKey: string;
+  @Prop() nwkSKey: string;
   @Prop({ type: [ConnectedGatewaySchema], default: [] }) connectedGateways: ConnectedGateway[];
 }
 
