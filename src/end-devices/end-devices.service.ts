@@ -34,11 +34,15 @@ export class EndDevicesService {
   async markSeen(devAddr: string, gatewayEUI: string, rssi: number) {
     await this.model.findOneAndUpdate(
       { devAddr: devAddr.toLowerCase() },
+      { $pull: { connectedGateways: { gatewayEUI } } },
+    ).exec();
+    await this.model.findOneAndUpdate(
+      { devAddr: devAddr.toLowerCase() },
       {
         lastSeen: new Date(),
         rssi,
         status: 'active',
-        $addToSet: { connectedGateways: { gatewayEUI, rssi } },
+        $push: { connectedGateways: { gatewayEUI, rssi } },
       },
     ).exec();
   }
