@@ -7,6 +7,9 @@
       "Read(//c/Project/Techno/LoraWan/frontend/**)",
       "Bash(find /c/Project/Techno/LoraWan -maxdepth 2 -type f -name \"package.json\" 2>/dev/null | grep -v node_modules)",
       "Read(//c/Project/Techno/LoraWan/**)"
+    ],
+    "additionalDirectories": [
+      "c:\\Project\\Techno\\LoraWan\\frontend\\src\\app\\components"
     ]
   }
 }

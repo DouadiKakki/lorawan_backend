@@ -78,7 +78,7 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
 
     if (pktType !== PKT_PUSH_DATA) return;
 
-    const gatewayEUI = msg.slice(4, 12).toString('hex');
+    const gatewayEUI = msg.slice(4, 12).toString('hex').toUpperCase();
 
     const ack = Buffer.alloc(4);
     ack.writeUInt8(version, 0);
