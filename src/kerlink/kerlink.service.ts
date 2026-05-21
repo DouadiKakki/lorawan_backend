@@ -5,22 +5,27 @@ import * as dgram from 'dgram';
 import * as crypto from 'crypto';
 import { UplinkMessagesService } from '../uplinks/uplinks.service';
 import { EndDevicesService } from '../end-devices/end-devices.service';
+import { GatewaysService } from '../gateways/gateways.service';
 
 const PKT_PUSH_DATA = 0x00;
 const PKT_PUSH_ACK = 0x01;
 const PKT_PULL_DATA = 0x02;
 const PKT_PULL_ACK = 0x04;
 
+const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
 @Injectable()
 export class KerlinkService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(KerlinkService.name);
   private server: dgram.Socket | null = null;
+  private offlineTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private config: ConfigService,
     private uplinkService: UplinkMessagesService,
     private endDevicesService: EndDevicesService,
     private eventEmitter: EventEmitter2,
+    private gatewaysService: GatewaysService,
   ) {}
 
   onModuleInit() {
@@ -42,10 +47,17 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.server.bind(port);
+
+    this.offlineTimer = setInterval(() => {
+      this.gatewaysService.markStaleOffline(OFFLINE_THRESHOLD_MS).catch(err =>
+        this.logger.error('Failed to mark stale gateways offline', err),
+      );
+    }, 60_000);
   }
 
   onModuleDestroy() {
     this.server?.close();
+    if (this.offlineTimer) clearInterval(this.offlineTimer);
   }
 
   private async handleUdp(msg: Buffer, rinfo: dgram.RemoteInfo) {
@@ -73,6 +85,10 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     ack.writeUInt16BE(token, 1);
     ack.writeUInt8(PKT_PUSH_ACK, 3);
     this.server!.send(ack, rinfo.port, rinfo.address);
+
+    this.gatewaysService.markSeen(gatewayEUI).catch(err =>
+      this.logger.warn(`markSeen failed for ${gatewayEUI}: ${err.message}`),
+    );
 
     let data: any;
     try {

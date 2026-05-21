@@ -4,7 +4,9 @@
       "PowerShell(Get-ChildItem -Path \"c:\\\\Project\\\\Techno\\\\LoraWan\\\\backend\" | Select-Object Name, @{Name=\"Type\"; Expression={if\\($_.PSIsContainer\\){\"Directory\"}else{\"File\"}}})",
       "Bash(npx tsc *)",
       "Bash(cd \"c:\\\\Project\\\\Techno\\\\LoraWan\\\\frontend\" && npx tsc --noEmit 2>&1)",
-      "Read(//c/Project/Techno/LoraWan/frontend/**)"
+      "Read(//c/Project/Techno/LoraWan/frontend/**)",
+      "Bash(find /c/Project/Techno/LoraWan -maxdepth 2 -type f -name \"package.json\" 2>/dev/null | grep -v node_modules)",
+      "Read(//c/Project/Techno/LoraWan/**)"
     ]
   }
 }

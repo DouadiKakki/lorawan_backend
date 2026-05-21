@@ -25,4 +25,19 @@ export class GatewaysService {
     const doc = await this.model.findByIdAndDelete(id).exec();
     if (!doc) throw new NotFoundException('Gateway not found');
   }
+
+  async markSeen(eui: string) {
+    await this.model.findOneAndUpdate(
+      { eui },
+      { status: 'online', lastSeen: new Date() },
+    ).exec();
+  }
+
+  async markStaleOffline(thresholdMs: number) {
+    const cutoff = new Date(Date.now() - thresholdMs);
+    await this.model.updateMany(
+      { status: 'online', lastSeen: { $lt: cutoff } },
+      { status: 'offline' },
+    ).exec();
+  }
 }
