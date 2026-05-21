@@ -160,6 +160,12 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
         receivedAt: new Date(),
       });
 
+      if (dev) {
+        this.endDevicesService.markSeen(parsed.devAddrHex, gatewayEUI, rssi ?? 0).catch(err =>
+          this.logger.warn(`markSeen device failed: ${err.message}`),
+        );
+      }
+
       this.eventEmitter.emit('uplink.received', uplink);
     }
   }
