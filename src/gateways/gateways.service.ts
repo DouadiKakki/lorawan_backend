@@ -36,7 +36,7 @@ export class GatewaysService {
       const ut = uptimeMap.get(g.eui);
       let uptime = '0%';
       if (ut) {
-        const firstSeen = g.createdAt ? new Date(g.createdAt as any) : ut.earliest;
+        const firstSeen = (g as any).createdAt ? new Date((g as any).createdAt) : ut.earliest;
         const totalHours = Math.max(1, Math.ceil((Date.now() - firstSeen.getTime()) / 3_600_000));
         uptime = `${Math.min(100, Math.round((ut.activeHours / totalHours) * 100))}%`;
       }
