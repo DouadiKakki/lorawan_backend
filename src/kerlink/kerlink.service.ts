@@ -68,6 +68,7 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     const pktType = msg.readUInt8(3);
 
     if (pktType === PKT_PULL_DATA) {
+      this.logger.debug(`PULL_DATA from ${rinfo.address}:${rinfo.port} — sending PULL_ACK`);
       const ack = Buffer.alloc(4);
       ack.writeUInt8(version, 0);
       ack.writeUInt16BE(token, 1);
@@ -76,17 +77,24 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    if (pktType !== PKT_PUSH_DATA) return;
+    if (pktType !== PKT_PUSH_DATA) {
+      this.logger.debug(`Unknown packet type 0x${pktType.toString(16)} from ${rinfo.address} — ignored`);
+      return;
+    }
 
     const gatewayEUI = msg.slice(4, 12).toString('hex').toUpperCase();
+    this.logger.log(`PUSH_DATA from ${rinfo.address}:${rinfo.port} — gatewayEUI=${gatewayEUI}`);
 
     const ack = Buffer.alloc(4);
     ack.writeUInt8(version, 0);
     ack.writeUInt16BE(token, 1);
     ack.writeUInt8(PKT_PUSH_ACK, 3);
     this.server!.send(ack, rinfo.port, rinfo.address);
+    this.logger.debug(`PUSH_ACK sent to ${rinfo.address}:${rinfo.port}`);
 
-    this.gatewaysService.markSeen(gatewayEUI).catch(err =>
+    this.gatewaysService.markSeen(gatewayEUI).then(() => {
+      this.logger.log(`markSeen OK — gatewayEUI=${gatewayEUI}`);
+    }).catch(err =>
       this.logger.warn(`markSeen failed for ${gatewayEUI}: ${err.message}`),
     );
 
@@ -98,14 +106,23 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    if (!Array.isArray(data.rxpk)) return;
+    if (!Array.isArray(data.rxpk)) {
+      this.logger.debug(`No rxpk array in payload from ${gatewayEUI}`);
+      return;
+    }
+
+    this.logger.log(`${data.rxpk.length} rxpk packet(s) from ${gatewayEUI}`);
 
     for (const pkt of data.rxpk) {
       if (!pkt.data) continue;
 
       const phy = Buffer.from(pkt.data, 'base64');
       const parsed = this.parseLoRaWAN(phy);
-      if (!parsed || parsed.note) continue;
+      if (!parsed || parsed.note) {
+        this.logger.debug(`Skipped packet from ${gatewayEUI}: ${parsed?.note ?? 'parse failed'}`);
+        continue;
+      }
+      this.logger.log(`LoRaWAN uplink from ${gatewayEUI} — DevAddr=${parsed.devAddrHex} fCnt=${parsed.fCnt16}`);
 
       const rssi = this.getRssi(pkt);
       const snr = this.getSnr(pkt);
