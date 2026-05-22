@@ -13,15 +13,23 @@ export class UplinkMessagesService {
 
   private toHex(buf: any): string {
     if (!buf) return '';
-    if (Buffer.isBuffer(buf)) return buf.toString('hex').toUpperCase().replace(/.{2}/g, '$& ').trim();
+    // Node Buffer
+    if (Buffer.isBuffer(buf))
+      return buf.toString('hex').toUpperCase().replace(/.{2}/g, '$& ').trim();
+    // BSON Binary (mongoose toObject keeps it as Binary)
+    if (typeof buf.toString === 'function' && buf.buffer instanceof Uint8Array)
+      return Buffer.from(buf.buffer).toString('hex').toUpperCase().replace(/.{2}/g, '$& ').trim();
+    // Plain {type:'Buffer',data:[...]} from JSON round-trip
     if (buf?.type === 'Buffer' && Array.isArray(buf.data))
       return Buffer.from(buf.data).toString('hex').toUpperCase().replace(/.{2}/g, '$& ').trim();
     return '';
   }
 
   private serialize(doc: UplinkMessageDocument) {
-    const obj = doc.toObject();
-    return { ...obj, dataHex: this.toHex(obj.data), data: undefined };
+    const obj = doc.toObject({ virtuals: false });
+    const dataHex = this.toHex(obj.data);
+    const { data: _data, ...rest } = obj as any;
+    return { ...rest, dataHex: dataHex || undefined };
   }
 
   async findAll(page = 1, limit = 50, deviceEUI?: string, applicationId?: string, gatewayEUI?: string) {
