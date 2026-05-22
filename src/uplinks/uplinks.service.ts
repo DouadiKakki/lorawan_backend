@@ -11,21 +11,35 @@ export class UplinkMessagesService {
     return new this.model(data).save();
   }
 
+  private toHex(buf: any): string {
+    if (!buf) return '';
+    if (Buffer.isBuffer(buf)) return buf.toString('hex').toUpperCase().replace(/.{2}/g, '$& ').trim();
+    if (buf?.type === 'Buffer' && Array.isArray(buf.data))
+      return Buffer.from(buf.data).toString('hex').toUpperCase().replace(/.{2}/g, '$& ').trim();
+    return '';
+  }
+
+  private serialize(doc: UplinkMessageDocument) {
+    const obj = doc.toObject();
+    return { ...obj, dataHex: this.toHex(obj.data), data: undefined };
+  }
+
   async findAll(page = 1, limit = 50, deviceEUI?: string, applicationId?: string, gatewayEUI?: string) {
     const filter: any = {};
     if (deviceEUI) filter.deviceEUI = deviceEUI;
     if (applicationId) filter.applicationId = applicationId;
     if (gatewayEUI) filter.gatewayEUI = gatewayEUI;
     const skip = (page - 1) * limit;
-    const [data, total] = await Promise.all([
+    const [docs, total] = await Promise.all([
       this.model.find(filter).sort({ receivedAt: -1 }).skip(skip).limit(limit).exec(),
       this.model.countDocuments(filter).exec(),
     ]);
-    return { data, total, page, limit };
+    return { data: docs.map(d => this.serialize(d)), total, page, limit };
   }
 
-  async findLatestByDevice(deviceEUI: string): Promise<UplinkMessageDocument | null> {
-    return this.model.findOne({ deviceEUI }).sort({ receivedAt: -1 }).exec();
+  async findLatestByDevice(deviceEUI: string) {
+    const doc = await this.model.findOne({ deviceEUI }).sort({ receivedAt: -1 }).exec();
+    return doc ? this.serialize(doc) : null;
   }
 
   async statsHourly(): Promise<{ time: string; uplinks: number }[]> {
