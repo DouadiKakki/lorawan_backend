@@ -14,6 +14,7 @@ import { MqttModule } from './mqtt/mqtt.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { StorageModule } from './storage/storage.module';
 import { KerlinkModule } from './kerlink/kerlink.module';
+import { AppConfigModule } from './config/config.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { KerlinkModule } from './kerlink/kerlink.module';
     WebsocketModule,
     StorageModule,
     KerlinkModule,
+    AppConfigModule,
   ],
 })
 export class AppModule {}
