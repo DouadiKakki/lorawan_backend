@@ -1,4 +1,5 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateGatewayDto {
   @IsString() name: string;
@@ -6,4 +7,9 @@ export class CreateGatewayDto {
   @IsOptional() @IsString() location?: string;
   @IsOptional() @IsString() companyId?: string;
   @IsOptional() @IsEnum(['online', 'offline', 'warning']) status?: string;
+  @IsOptional() @IsNumber() @Type(() => Number) latitude?: number;
+  @IsOptional() @IsNumber() @Type(() => Number) longitude?: number;
+  @IsOptional() @IsNumber() @Type(() => Number) altitude?: number;
+  @IsOptional() @IsString() placement?: string;
+  @IsOptional() @IsEnum(['manual', 'inherited']) locationType?: string;
 }

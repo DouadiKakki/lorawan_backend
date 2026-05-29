@@ -12,6 +12,11 @@ export class Gateway {
   @Prop({ required: true, enum: ['online', 'offline', 'warning'], default: 'offline' }) status: string;
   @Prop({ default: '0%' }) uptime: string;
   @Prop() lastSeen: Date;
+  @Prop({ type: Number }) latitude: number;
+  @Prop({ type: Number }) longitude: number;
+  @Prop({ type: Number, default: 0 }) altitude: number;
+  @Prop({ default: 'Unknown' }) placement: string;
+  @Prop({ default: 'manual', enum: ['manual', 'inherited'] }) locationType: string;
 }
 
 export const GatewaySchema = SchemaFactory.createForClass(Gateway);

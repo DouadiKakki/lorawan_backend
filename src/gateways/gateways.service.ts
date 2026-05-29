@@ -45,9 +45,29 @@ export class GatewaysService {
   }
 
   async findOne(id: string) {
-    const doc = await this.model.findById(id).populate('companyId', 'name').exec();
+    const doc = await this.model.findById(id).populate('companyId', 'name').lean().exec();
     if (!doc) throw new NotFoundException('Gateway not found');
-    return doc;
+
+    const [countRows, uptimeRows] = await Promise.all([
+      this.uplinkModel.aggregate([
+        { $match: { gatewayEUI: doc.eui } },
+        { $group: { _id: null, count: { $addToSet: '$deviceEUI' } } },
+        { $project: { count: { $size: '$count' } } },
+      ]) as Promise<{ count: number }[]>,
+      this.uplinkModel.aggregate([
+        { $match: { gatewayEUI: doc.eui } },
+        { $group: { _id: { $dateTrunc: { date: '$receivedAt', unit: 'hour' } }, }, },
+        { $count: 'activeHours' },
+      ]) as Promise<{ activeHours: number }[]>,
+    ]);
+
+    const devices = countRows[0]?.count ?? 0;
+    const activeHours = uptimeRows[0]?.activeHours ?? 0;
+    const firstSeen = (doc as any).createdAt ? new Date((doc as any).createdAt) : new Date();
+    const totalHours = Math.max(1, Math.ceil((Date.now() - firstSeen.getTime()) / 3_600_000));
+    const uptime = `${Math.min(100, Math.round((activeHours / totalHours) * 100))}%`;
+
+    return { ...doc, devices, uptime };
   }
   async update(id: string, dto: UpdateGatewayDto) {
     const doc = await this.model.findByIdAndUpdate(id, dto, { new: true }).exec();

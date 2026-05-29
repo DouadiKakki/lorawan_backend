@@ -5,10 +5,34 @@ import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { EndDevice, EndDeviceDocument } from '../end-devices/schemas/end-device.schema';
+import { Company, CompanyDocument } from '../companies/schemas/company.schema';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(EndDevice.name) private endDeviceModel: Model<EndDeviceDocument>,
+    @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
+  ) {}
+
+  private async appendDevicesCount(users: UserDocument[]): Promise<any[]> {
+    const companyNames = [...new Set(users.map(u => u.company).filter(Boolean))];
+    const companies = await this.companyModel.find({ name: { $in: companyNames } }).select('_id name').exec();
+    const companyIdsByName = new Map(companies.map(c => [c.name, c._id]));
+
+    const companyCounts = new Map<string, number>();
+    for (const company of companies) {
+      const count = await this.endDeviceModel.countDocuments({ companyId: company._id }).exec();
+      companyCounts.set(company._id.toString(), count);
+    }
+
+    return users.map(u => {
+      const companyId = u.company ? companyIdsByName.get(u.company) : null;
+      const devicesCount = companyId ? (companyCounts.get(companyId.toString()) ?? 0) : 0;
+      return { ...u.toObject(), devicesCount };
+    });
+  }
 
   async create(dto: CreateUserDto): Promise<UserDocument> {
     const existing = await this.userModel.findOne({ email: dto.email.toLowerCase() });
@@ -18,14 +42,16 @@ export class UsersService {
     return user.save();
   }
 
-  async findAll(): Promise<UserDocument[]> {
-    return this.userModel.find().select('-passwordHash').exec();
+  async findAll(): Promise<any[]> {
+    const users = await this.userModel.find().select('-passwordHash').exec();
+    return this.appendDevicesCount(users);
   }
 
-  async findOne(id: string): Promise<UserDocument> {
+  async findOne(id: string): Promise<any> {
     const user = await this.userModel.findById(id).select('-passwordHash').exec();
     if (!user) throw new NotFoundException('User not found');
-    return user;
+    const [result] = await this.appendDevicesCount([user]);
+    return result;
   }
 
   async findByEmail(email: string): Promise<UserDocument | null> {
