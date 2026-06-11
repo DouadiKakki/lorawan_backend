@@ -15,7 +15,10 @@ export class EndDevicesService {
     private mqttService: MqttService,
   ) {}
 
-  create(dto: CreateEndDeviceDto) { return new this.model(dto).save(); }
+  create(dto: CreateEndDeviceDto) {
+    if (dto.devAddr) dto.devAddr = dto.devAddr.toLowerCase();
+    return new this.model(dto).save();
+  }
   findAll() { return this.model.find().populate('applicationId', 'name').populate('companyId', 'name').exec(); }
   async findOne(id: string) {
     const doc = await this.model.findById(id).populate('applicationId', 'name').populate('companyId', 'name').exec();

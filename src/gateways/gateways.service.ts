@@ -13,7 +13,10 @@ export class GatewaysService {
     @InjectModel(UplinkMessage.name) private uplinkModel: Model<any>,
   ) {}
 
-  create(dto: CreateGatewayDto) { return new this.model(dto).save(); }
+  create(dto: CreateGatewayDto) {
+    if (dto.eui) dto.eui = dto.eui.toUpperCase();
+    return new this.model(dto).save();
+  }
 
   async findAll() {
     const gateways = await this.model.find().populate('companyId', 'name').lean().exec();
@@ -70,6 +73,7 @@ export class GatewaysService {
     return { ...doc, devices, uptime };
   }
   async update(id: string, dto: UpdateGatewayDto) {
+    if (dto.eui) dto.eui = dto.eui.toUpperCase();
     const doc = await this.model.findByIdAndUpdate(id, dto, { new: true }).exec();
     if (!doc) throw new NotFoundException('Gateway not found');
     return doc;
