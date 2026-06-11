@@ -1,4 +1,4 @@
-import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateEndDeviceDto {
   @IsString() name: string;
@@ -10,4 +10,17 @@ export class CreateEndDeviceDto {
   @IsOptional() @IsString() devAddr?: string;
   @IsOptional() @IsString() appSKey?: string;
   @IsOptional() @IsString() nwkSKey?: string;
+  @IsOptional() @IsString() joinEUI?: string;
+  @IsOptional() @IsString() appKey?: string;
+  @IsOptional() @IsString() nwkKey?: string;
+  @IsOptional() @IsString() fNwkSIntKey?: string;
+  @IsOptional() @IsString() sNwkSIntKey?: string;
+  @IsOptional() @IsString() nwkSEncKey?: string;
+  @IsOptional() @IsString() frequencyPlan?: string;
+  @IsOptional() @IsString() lorawanVersion?: string;
+  @IsOptional() @IsString() regionalParametersVersion?: string;
+  @IsOptional() @IsBoolean() supportsClassB?: boolean;
+  @IsOptional() @IsBoolean() supportsClassC?: boolean;
+  @IsOptional() @IsEnum(['OTAA', 'ABP', 'Multicast']) activationMode?: string;
+  @IsOptional() @IsBoolean() resetsJoinNonces?: boolean;
 }

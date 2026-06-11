@@ -52,6 +52,14 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     this.client?.end();
   }
 
+  publish(topic: string, payload: string | Buffer): void {
+    if (!this.client?.connected) {
+      this.logger.warn(`MQTT not connected, cannot publish to ${topic}`);
+      return;
+    }
+    this.client.publish(topic, payload, { qos: 0 });
+  }
+
   private async handleMessage(topic: string, payload: Buffer) {
     let parsed: any;
     try {
