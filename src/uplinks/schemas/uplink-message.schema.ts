@@ -11,6 +11,12 @@ export class UplinkMessage {
   @Prop({ default: 0 }) rssi: number;
   @Prop({ default: 0 }) snr: number;
   @Prop({ default: 0 }) frequency: number;
+  @Prop() dataRate: string;
+  @Prop() codingRate: string;
+  @Prop() modulation: string;
+  @Prop() spreadingFactor: number;
+  @Prop() bandwidth: number;
+  @Prop() channel: number;
   @Prop({ default: 0 }) fPort: number;
   @Prop({ default: 0 }) fCnt: number;
   @Prop({ type: Buffer }) data: Buffer;

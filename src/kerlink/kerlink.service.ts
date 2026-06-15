@@ -8,17 +8,22 @@ import { EndDevicesService } from '../end-devices/end-devices.service';
 import { GatewaysService } from '../gateways/gateways.service';
 
 const PKT_PUSH_DATA = 0x00;
-const PKT_PUSH_ACK = 0x01;
+const PKT_PUSH_ACK  = 0x01;
 const PKT_PULL_DATA = 0x02;
-const PKT_PULL_ACK = 0x04;
+const PKT_PULL_RESP = 0x03;
+const PKT_PULL_ACK  = 0x04;
 
-const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000;
+const NET_ID = Buffer.from('000000', 'hex');
 
 @Injectable()
 export class KerlinkService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(KerlinkService.name);
   private server: dgram.Socket | null = null;
   private offlineTimer: NodeJS.Timeout | null = null;
+
+  /** Last gateway that sent PULL_DATA — used to push Join Accept downlinks */
+  private gatewayDownlink: { address: string; port: number } | null = null;
 
   constructor(
     private config: ConfigService,
@@ -60,15 +65,19 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     if (this.offlineTimer) clearInterval(this.offlineTimer);
   }
 
+  // ─── UDP dispatch ────────────────────────────────────────────────────────────
+
   private async handleUdp(msg: Buffer, rinfo: dgram.RemoteInfo) {
     if (msg.length < 4) return;
 
-    const version = msg.readUInt8(0);
-    const token = msg.readUInt16BE(1);
-    const pktType = msg.readUInt8(3);
+    const version  = msg.readUInt8(0);
+    const token    = msg.readUInt16BE(1);
+    const pktType  = msg.readUInt8(3);
 
     if (pktType === PKT_PULL_DATA) {
-      this.logger.debug(`PULL_DATA from ${rinfo.address}:${rinfo.port} — sending PULL_ACK`);
+      this.gatewayDownlink = { address: rinfo.address, port: rinfo.port };
+      this.logger.debug(`PULL_DATA from ${rinfo.address}:${rinfo.port}`);
+
       const ack = Buffer.alloc(4);
       ack.writeUInt8(version, 0);
       ack.writeUInt16BE(token, 1);
@@ -78,7 +87,7 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (pktType !== PKT_PUSH_DATA) {
-      this.logger.debug(`Unknown packet type 0x${pktType.toString(16)} from ${rinfo.address} — ignored`);
+      this.logger.debug(`Unknown packet type 0x${pktType.toString(16)} — ignored`);
       return;
     }
 
@@ -90,12 +99,9 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     ack.writeUInt16BE(token, 1);
     ack.writeUInt8(PKT_PUSH_ACK, 3);
     this.server!.send(ack, rinfo.port, rinfo.address);
-    this.logger.debug(`PUSH_ACK sent to ${rinfo.address}:${rinfo.port}`);
 
-    this.gatewaysService.markSeen(gatewayEUI).then(() => {
-      this.logger.log(`markSeen OK — gatewayEUI=${gatewayEUI}`);
-    }).catch(err =>
-      this.logger.warn(`markSeen failed for ${gatewayEUI}: ${err.message}`),
+    this.gatewaysService.markSeen(gatewayEUI).catch(err =>
+      this.logger.warn(`markSeen gateway failed for ${gatewayEUI}: ${err.message}`),
     );
 
     let data: any;
@@ -106,62 +112,71 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    if (!Array.isArray(data.rxpk)) {
-      this.logger.debug(`No rxpk array in payload from ${gatewayEUI}`);
-      return;
-    }
-
-    this.logger.log(`${data.rxpk.length} rxpk packet(s) from ${gatewayEUI}`);
+    if (!Array.isArray(data.rxpk)) return;
 
     for (const pkt of data.rxpk) {
       if (!pkt.data) continue;
 
       const phy = Buffer.from(pkt.data, 'base64');
+
+      // ── OTAA Join Request ─────────────────────────────────────────────────
+      const joinReq = this.parseJoinRequest(phy);
+      if (joinReq) {
+        await this.handleJoinRequest(joinReq, pkt, gatewayEUI);
+        continue;
+      }
+
+      // ── Normal data uplink ────────────────────────────────────────────────
       const parsed = this.parseLoRaWAN(phy);
       if (!parsed || parsed.note) {
         this.logger.debug(`Skipped packet from ${gatewayEUI}: ${parsed?.note ?? 'parse failed'}`);
         continue;
       }
-      this.logger.log(`LoRaWAN uplink from ${gatewayEUI} — DevAddr=${parsed.devAddrHex} fCnt=${parsed.fCnt16}`);
+
+      this.logger.log(`Uplink from ${gatewayEUI} — DevAddr=${parsed.devAddrHex} fCnt=${parsed.fCnt16}`);
 
       const rssi = this.getRssi(pkt);
-      const snr = this.getSnr(pkt);
+      const snr  = this.getSnr(pkt);
+      const rf   = this.parseRfMeta(pkt);
 
-      let rawData = parsed.frmPayload;
+      let rawData     = parsed.frmPayload;
       let decodedData: Record<string, any> = {};
 
       const dev = await this.endDevicesService.findByDevAddr(parsed.devAddrHex);
 
       if (dev?.appSKey) {
         try {
-          rawData = this.decryptPayload(
-            dev.appSKey,
-            parsed.devAddrLE,
-            parsed.fCnt32,
-            0,
-            parsed.frmPayload,
-          );
-          decodedData = { hex: rawData.toString('hex'), ascii: rawData.toString('utf8').replace(/[^\x20-\x7E]/g, '.') };
+          rawData = this.decryptPayload(dev.appSKey, parsed.devAddrLE, parsed.fCnt32, 0, parsed.frmPayload);
+          decodedData = {
+            hex:   rawData.toString('hex'),
+            ascii: rawData.toString('utf8').replace(/[^\x20-\x7E]/g, '.'),
+          };
         } catch (e: any) {
           this.logger.warn(`Decrypt failed for DevAddr ${parsed.devAddrHex}: ${e.message}`);
         }
       }
 
       const uplink = await this.uplinkService.create({
-        deviceEUI: dev?.devEUI ?? parsed.devAddrHex,
+        deviceEUI:      dev?.devEUI ?? parsed.devAddrHex,
         gatewayEUI,
-        rssi: rssi ?? 0,
-        snr: snr ?? 0,
-        frequency: pkt.freq ?? 0,
-        fPort: parsed.fport ?? 0,
-        fCnt: parsed.fCnt16,
-        data: rawData,
+        rssi:           rssi ?? 0,
+        snr:            snr  ?? 0,
+        frequency:      pkt.freq ?? 0,
+        dataRate:       rf.dataRate,
+        codingRate:     rf.codingRate,
+        modulation:     rf.modulation,
+        spreadingFactor: rf.spreadingFactor,
+        bandwidth:      rf.bandwidth,
+        channel:        rf.channel,
+        fPort:          parsed.fport ?? 0,
+        fCnt:           parsed.fCnt16,
+        data:           rawData,
         decodedData,
-        receivedAt: new Date(),
+        receivedAt:     new Date(),
       });
 
       if (dev) {
-        this.endDevicesService.markSeen(parsed.devAddrHex, gatewayEUI, rssi ?? 0).catch(err =>
+        this.endDevicesService.markSeen(parsed.devAddrHex, gatewayEUI, rssi ?? 0, parsed.fCnt16).catch(err =>
           this.logger.warn(`markSeen device failed: ${err.message}`),
         );
       }
@@ -169,6 +184,208 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
       this.eventEmitter.emit('uplink.received', uplink);
     }
   }
+
+  // ─── OTAA ────────────────────────────────────────────────────────────────────
+
+  private parseJoinRequest(phy: Buffer): {
+    joinEUI: string; devEUI: string; devNonce: Buffer; mic: Buffer; raw: Buffer;
+  } | null {
+    if (!phy || phy.length !== 23) return null;
+    const mtype = (phy[0] >> 5) & 0x07;
+    if (mtype !== 0) return null;
+
+    return {
+      joinEUI:  Buffer.from(phy.slice(1, 9)).reverse().toString('hex').toUpperCase(),
+      devEUI:   Buffer.from(phy.slice(9, 17)).reverse().toString('hex').toUpperCase(),
+      devNonce: phy.slice(17, 19),
+      mic:      phy.slice(19, 23),
+      raw:      phy,
+    };
+  }
+
+  private async handleJoinRequest(
+    joinReq: { joinEUI: string; devEUI: string; devNonce: Buffer; mic: Buffer; raw: Buffer },
+    pkt: any,
+    _gatewayEUI: string,
+  ) {
+    this.logger.log(`OTAA Join Request — DevEUI=${joinReq.devEUI} JoinEUI=${joinReq.joinEUI}`);
+
+    const dev = await this.endDevicesService.findByDevEUI(joinReq.devEUI);
+    if (!dev) {
+      this.logger.warn(`Join: DevEUI ${joinReq.devEUI} not registered`);
+      return;
+    }
+    if (!dev.appKey) {
+      this.logger.warn(`Join: DevEUI ${joinReq.devEUI} has no appKey`);
+      return;
+    }
+    if (dev.joinEUI && dev.joinEUI.toUpperCase() !== joinReq.joinEUI) {
+      this.logger.warn(`Join: JoinEUI mismatch for ${joinReq.devEUI}`);
+      return;
+    }
+
+    const appKey = Buffer.from(dev.appKey, 'hex');
+    const nwkKey = dev.nwkKey ? Buffer.from(dev.nwkKey, 'hex') : appKey;
+
+    const micApp = this.aesCmac(appKey, joinReq.raw.slice(0, 19)).slice(0, 4);
+    const micNwk = this.aesCmac(nwkKey, joinReq.raw.slice(0, 19)).slice(0, 4);
+
+    let joinKey: Buffer;
+    if (micNwk.equals(joinReq.mic)) {
+      joinKey = nwkKey;
+    } else if (micApp.equals(joinReq.mic)) {
+      joinKey = appKey;
+    } else {
+      this.logger.warn(`Join: MIC invalid for ${joinReq.devEUI}`);
+      return;
+    }
+
+    const joinNonce  = crypto.randomBytes(3);
+    const devAddrLE  = crypto.randomBytes(4);
+    const devAddrHex = Buffer.from(devAddrLE).reverse().toString('hex').toLowerCase();
+
+    const nwkSKey = this.deriveSessionKey(joinKey, 0x01, joinNonce, NET_ID, joinReq.devNonce);
+    const appSKey = this.deriveSessionKey(joinKey, 0x02, joinNonce, NET_ID, joinReq.devNonce);
+
+    const joinAcceptPhy = this.buildJoinAcceptPhy(joinKey, joinNonce, devAddrLE);
+
+    // Persist session keys on the existing device record
+    await this.endDevicesService.updateOtaaSession(dev._id.toString(), {
+      devAddr:      devAddrHex,
+      appSKey:      appSKey.toString('hex').toUpperCase(),
+      nwkSKey:      nwkSKey.toString('hex').toUpperCase(),
+      sessionStart: new Date(),
+    });
+
+    this.logger.log(`Join: DevAddr=${devAddrHex} AppSKey=${appSKey.toString('hex').toUpperCase()}`);
+
+    this.sendJoinAccept(pkt, joinAcceptPhy);
+  }
+
+  private buildJoinAcceptPhy(joinKey: Buffer, joinNonce: Buffer, devAddrLE: Buffer): Buffer {
+    const payload = Buffer.concat([
+      joinNonce,
+      NET_ID,
+      devAddrLE,
+      Buffer.from([0x00]), // DLSettings
+      Buffer.from([0x05]), // RXDelay = 5 s
+    ]);
+
+    const mhdr = Buffer.from([0x20]);
+    const mic  = this.aesCmac(joinKey, Buffer.concat([mhdr, payload])).slice(0, 4);
+    const plain = Buffer.concat([payload, mic]);
+
+    // LoRaWAN: Join Accept body is encrypted with AES-128 decrypt
+    const decipher = crypto.createDecipheriv('aes-128-ecb', joinKey, null);
+    decipher.setAutoPadding(false);
+    const encrypted = Buffer.concat([decipher.update(plain), decipher.final()]);
+
+    return Buffer.concat([mhdr, encrypted]);
+  }
+
+  private deriveSessionKey(key: Buffer, type: number, joinNonce: Buffer, netId: Buffer, devNonce: Buffer): Buffer {
+    const block = Buffer.alloc(16, 0);
+    block[0] = type;
+    joinNonce.copy(block, 1);
+    netId.copy(block, 4);
+    devNonce.copy(block, 7);
+
+    const cipher = crypto.createCipheriv('aes-128-ecb', key, null);
+    cipher.setAutoPadding(false);
+    return Buffer.concat([cipher.update(block), cipher.final()]);
+  }
+
+  private sendJoinAccept(pkt: any, phyPayload: Buffer) {
+    if (!this.gatewayDownlink) {
+      this.logger.warn('JoinAccept: no PULL_DATA gateway path available');
+      return;
+    }
+    if (typeof pkt.tmst !== 'number') {
+      this.logger.warn('JoinAccept: no tmst in uplink packet');
+      return;
+    }
+
+    const txpk = {
+      imme: false,
+      tmst: pkt.tmst + 5_000_000,
+      freq: pkt.freq,
+      rfch: 0,
+      powe: 14,
+      modu: 'LORA',
+      datr: pkt.datr,
+      codr: '4/5',
+      ipol: true,
+      size: phyPayload.length,
+      data: phyPayload.toString('base64'),
+    };
+
+    const json = Buffer.from(JSON.stringify({ txpk }));
+    const down = Buffer.alloc(4 + json.length);
+    down.writeUInt8(2, 0);
+    down.writeUInt16BE(Math.floor(Math.random() * 0xffff), 1);
+    down.writeUInt8(PKT_PULL_RESP, 3);
+    json.copy(down, 4);
+
+    this.server!.send(down, this.gatewayDownlink.port, this.gatewayDownlink.address);
+    this.logger.log(`JoinAccept sent via ${this.gatewayDownlink.address}:${this.gatewayDownlink.port}`);
+  }
+
+  // ─── AES-CMAC ────────────────────────────────────────────────────────────────
+
+  private aesCmac(key: Buffer, message: Buffer): Buffer {
+    const Rb   = 0x87;
+    const zero = Buffer.alloc(16, 0);
+
+    const aesEnc = (k: Buffer, d: Buffer) => {
+      const c = crypto.createCipheriv('aes-128-ecb', k, null);
+      c.setAutoPadding(false);
+      return Buffer.concat([c.update(d), c.final()]);
+    };
+
+    const shiftLeft = (b: Buffer): Buffer => {
+      const out = Buffer.alloc(16);
+      let carry = 0;
+      for (let i = 15; i >= 0; i--) {
+        out[i] = ((b[i] << 1) & 0xff) | carry;
+        carry  = b[i] & 0x80 ? 1 : 0;
+      }
+      return out;
+    };
+
+    const xor16 = (a: Buffer, b: Buffer): Buffer => {
+      const out = Buffer.alloc(16);
+      for (let i = 0; i < 16; i++) out[i] = a[i] ^ b[i];
+      return out;
+    };
+
+    const L  = aesEnc(key, zero);
+    let K1   = shiftLeft(L);
+    if (L[0] & 0x80) K1[15] ^= Rb;
+    let K2   = shiftLeft(K1);
+    if (K1[0] & 0x80) K2[15] ^= Rb;
+
+    const n            = Math.max(1, Math.ceil(message.length / 16));
+    const lastComplete = message.length > 0 && message.length % 16 === 0;
+
+    let lastBlock: Buffer;
+    if (lastComplete) {
+      lastBlock = xor16(message.slice((n - 1) * 16, n * 16), K1);
+    } else {
+      const padded = Buffer.alloc(16, 0);
+      const last   = message.slice((n - 1) * 16);
+      last.copy(padded);
+      padded[last.length] = 0x80;
+      lastBlock = xor16(padded, K2);
+    }
+
+    let X = Buffer.alloc(16, 0);
+    for (let i = 0; i < n - 1; i++) {
+      X = aesEnc(key, xor16(X, message.slice(i * 16, i * 16 + 16)));
+    }
+    return aesEnc(key, xor16(X, lastBlock));
+  }
+
+  // ─── LoRaWAN uplink parse ─────────────────────────────────────────────────────
 
   private parseLoRaWAN(phy: Buffer): {
     devAddrHex: string;
@@ -182,7 +399,6 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     if (!phy || phy.length < 12) return null;
 
     const mtype = (phy[0] >> 5) & 0x07;
-    // 2 = Unconfirmed Data Up, 4 = Confirmed Data Up
     if (mtype !== 2 && mtype !== 4) {
       return { devAddrHex: '', devAddrLE: Buffer.alloc(0), fCnt16: 0, fCnt32: 0, fport: null, frmPayload: Buffer.alloc(0), note: 'Not a data-up frame' };
     }
@@ -190,12 +406,12 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     const macPayload = phy.slice(1, phy.length - 4);
     if (macPayload.length < 7) return null;
 
-    const devAddrLE = macPayload.slice(0, 4);
+    const devAddrLE  = macPayload.slice(0, 4);
     const devAddrHex = Buffer.from(devAddrLE).reverse().toString('hex');
-    const fctrl = macPayload[4];
-    const fCnt16 = macPayload.readUInt16LE(5);
-    const fOptsLen = fctrl & 0x0f;
-    const fhdrLen = 4 + 1 + 2 + fOptsLen;
+    const fctrl      = macPayload[4];
+    const fCnt16     = macPayload.readUInt16LE(5);
+    const fOptsLen   = fctrl & 0x0f;
+    const fhdrLen    = 4 + 1 + 2 + fOptsLen;
 
     if (macPayload.length < fhdrLen) return null;
 
@@ -204,18 +420,46 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     let frmPayload = Buffer.alloc(0);
 
     if (afterFhdr.length >= 1) {
-      fport = afterFhdr[0];
+      fport      = afterFhdr[0];
       frmPayload = afterFhdr.slice(1);
     }
 
     return { devAddrHex, devAddrLE, fCnt16, fCnt32: fCnt16, fport, frmPayload };
   }
 
+  // ─── RF metadata ─────────────────────────────────────────────────────────────
+
+  private parseRfMeta(pkt: any): {
+    dataRate?: string; codingRate?: string; modulation?: string;
+    spreadingFactor?: number; bandwidth?: number; channel?: number;
+  } {
+    const dataRate  = typeof pkt.datr === 'string' ? pkt.datr : undefined;
+    const codingRate = typeof pkt.codr === 'string' ? pkt.codr : undefined;
+    const modulation = typeof pkt.modu === 'string' ? pkt.modu : undefined;
+    const channel   = typeof pkt.chan === 'number'  ? pkt.chan  : undefined;
+
+    let spreadingFactor: number | undefined;
+    let bandwidth: number | undefined;
+
+    // datr for LORA looks like "SF7BW125"
+    if (dataRate) {
+      const m = dataRate.match(/SF(\d+)BW(\d+)/i);
+      if (m) {
+        spreadingFactor = parseInt(m[1], 10);
+        bandwidth       = parseInt(m[2], 10);
+      }
+    }
+
+    return { dataRate, codingRate, modulation, spreadingFactor, bandwidth, channel };
+  }
+
+  // ─── Payload decrypt ─────────────────────────────────────────────────────────
+
   private decryptPayload(appSKeyHex: string, devAddrLE: Buffer, fCnt32: number, dir: number, payload: Buffer): Buffer {
     const key = Buffer.from(appSKeyHex, 'hex');
     if (key.length !== 16) throw new Error('AppSKey must be 16 bytes');
 
-    const out = Buffer.alloc(payload.length);
+    const out    = Buffer.alloc(payload.length);
     const blocks = Math.ceil(payload.length / 16);
 
     for (let i = 1; i <= blocks; i++) {
@@ -231,14 +475,14 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
       const Si = Buffer.concat([cipher.update(Ai), cipher.final()]);
 
       const start = (i - 1) * 16;
-      const end = Math.min(start + 16, payload.length);
-      for (let j = start; j < end; j++) {
-        out[j] = payload[j] ^ Si[j - start];
-      }
+      const end   = Math.min(start + 16, payload.length);
+      for (let j = start; j < end; j++) out[j] = payload[j] ^ Si[j - start];
     }
 
     return out;
   }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────────
 
   private getRssi(pkt: any): number | null {
     const v = pkt.rssi ?? pkt.rsig ?? pkt.rssis;

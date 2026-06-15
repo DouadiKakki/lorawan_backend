@@ -40,6 +40,20 @@ export class EndDevicesService {
     return this.model.findOne({ devAddr: devAddr.toLowerCase() }).exec();
   }
 
+  findByDevEUI(devEUI: string): Promise<EndDeviceDocument | null> {
+    return this.model.findOne({ devEUI: devEUI.toUpperCase() }).exec();
+  }
+
+  async updateOtaaSession(id: string, session: { devAddr: string; appSKey: string; nwkSKey: string; sessionStart: Date }) {
+    await this.model.findByIdAndUpdate(id, {
+      devAddr:      session.devAddr,
+      appSKey:      session.appSKey,
+      nwkSKey:      session.nwkSKey,
+      sessionStart: session.sessionStart,
+      status:       'active',
+    }).exec();
+  }
+
   async sendDownlink(id: string, dto: SendDownlinkDto) {
     const device = await this.model.findById(id).exec();
     if (!device) throw new NotFoundException('End device not found');
@@ -68,19 +82,21 @@ export class EndDevicesService {
     return doc;
   }
 
-  async markSeen(devAddr: string, gatewayEUI: string, rssi: number) {
+  async markSeen(devAddr: string, gatewayEUI: string, rssi: number, fCntUp?: number) {
     await this.model.findOneAndUpdate(
       { devAddr: devAddr.toLowerCase() },
       { $pull: { connectedGateways: { gatewayEUI } } },
     ).exec();
+    const update: any = {
+      lastSeen: new Date(),
+      rssi,
+      status: 'active',
+      $push: { connectedGateways: { gatewayEUI, rssi } },
+    };
+    if (fCntUp !== undefined) update.fCntUp = fCntUp;
     await this.model.findOneAndUpdate(
       { devAddr: devAddr.toLowerCase() },
-      {
-        lastSeen: new Date(),
-        rssi,
-        status: 'active',
-        $push: { connectedGateways: { gatewayEUI, rssi } },
-      },
+      update,
     ).exec();
   }
 }
