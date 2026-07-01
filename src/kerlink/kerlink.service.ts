@@ -34,7 +34,7 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    const port = this.config.get<number>('KERLINK_UDP_PORT') ?? 1700;
+    const port = parseInt(this.config.get<string>('KERLINK_UDP_PORT') ?? '1700', 10);
     this.server = dgram.createSocket('udp4');
 
     this.server.on('listening', () => {
