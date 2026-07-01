@@ -7,12 +7,14 @@ import { UpdateEndDeviceDto } from './dto/update-end-device.dto';
 import { SendDownlinkDto } from './dto/send-downlink.dto';
 import { UpdateShareDto } from './dto/update-share.dto';
 import { MqttService } from '../mqtt/mqtt.service';
+import { EventsGateway } from '../websocket/events.gateway';
 
 @Injectable()
 export class EndDevicesService {
   constructor(
     @InjectModel(EndDevice.name) private model: Model<EndDeviceDocument>,
     private mqttService: MqttService,
+    private eventsGateway: EventsGateway,
   ) {}
 
   create(dto: CreateEndDeviceDto) {
@@ -94,9 +96,11 @@ export class EndDevicesService {
       $push: { connectedGateways: { gatewayEUI, rssi } },
     };
     if (fCntUp !== undefined) update.fCntUp = fCntUp;
-    await this.model.findOneAndUpdate(
+    const doc = await this.model.findOneAndUpdate(
       { devAddr: devAddr.toLowerCase() },
       update,
+      { new: true },
     ).exec();
+    if (doc) this.eventsGateway.emitDeviceStatus(doc);
   }
 }
