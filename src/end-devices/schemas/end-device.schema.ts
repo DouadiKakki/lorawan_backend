@@ -63,6 +63,9 @@ export class EndDevice {
   // Sharing
   @Prop({ type: [CollaboratorSchema], default: [] }) collaborators: Collaborator[];
   @Prop({ type: [SharedCompanySchema], default: [] }) sharedCompanies: SharedCompany[];
+  // Payload formatter
+  @Prop({ default: 'none', enum: ['none', 'javascript', 'cayennelpp'] }) payloadFormatterType: string;
+  @Prop() payloadFormatterCode: string;
 }
 
 export const EndDeviceSchema = SchemaFactory.createForClass(EndDevice);

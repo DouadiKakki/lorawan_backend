@@ -23,4 +23,6 @@ export class CreateEndDeviceDto {
   @IsOptional() @IsBoolean() supportsClassC?: boolean;
   @IsOptional() @IsEnum(['OTAA', 'ABP', 'Multicast']) activationMode?: string;
   @IsOptional() @IsBoolean() resetsJoinNonces?: boolean;
+  @IsOptional() @IsEnum(['none', 'javascript', 'cayennelpp']) payloadFormatterType?: string;
+  @IsOptional() @IsString() payloadFormatterCode?: string;
 }
