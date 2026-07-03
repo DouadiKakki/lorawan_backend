@@ -17,6 +17,7 @@ export class Gateway {
   @Prop({ type: Number, default: 0 }) altitude: number;
   @Prop({ default: 'Unknown' }) placement: string;
   @Prop({ default: 'manual', enum: ['manual', 'inherited'] }) locationType: string;
+  @Prop({ default: 'chirpstack', enum: ['chirpstack', 'kerlink'] }) protocol: string;
 }
 
 export const GatewaySchema = SchemaFactory.createForClass(Gateway);

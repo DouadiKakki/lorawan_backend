@@ -51,23 +51,29 @@ export class UplinkMessagesService {
   }
 
   async statsHourly(): Promise<{ time: string; uplinks: number }[]> {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const now = new Date();
+    const currentHourStart = new Date(now);
+    currentHourStart.setMinutes(0, 0, 0);
+    const since = new Date(currentHourStart.getTime() - 23 * 60 * 60 * 1000);
     const raw = await this.model.aggregate([
       { $match: { receivedAt: { $gte: since } } },
       {
         $group: {
-          _id: { $hour: '$receivedAt' },
+          _id: {
+            $dateTrunc: { date: '$receivedAt', unit: 'hour' },
+          },
           uplinks: { $sum: 1 },
         },
       },
-      { $sort: { _id: 1 } },
     ]);
-    // fill all 24 hours
-    const map = new Map(raw.map((r: any) => [r._id, r.uplinks]));
-    return Array.from({ length: 24 }, (_, h) => ({
-      time: `${String(h).padStart(2, '0')}:00`,
-      uplinks: (map.get(h) as number) ?? 0,
-    }));
+    const map = new Map(raw.map((r: any) => [r._id.getTime(), r.uplinks]));
+    return Array.from({ length: 24 }, (_, i) => {
+      const bucket = new Date(since.getTime() + i * 60 * 60 * 1000);
+      return {
+        time: `${String(bucket.getHours()).padStart(2, '0')}:00`,
+        uplinks: (map.get(bucket.getTime()) as number) ?? 0,
+      };
+    });
   }
 
   async statsGateway(): Promise<{ name: string; packets: number }[]> {
@@ -93,5 +99,28 @@ export class UplinkMessagesService {
       this.model.distinct('gatewayEUI').then((g: string[]) => g.length),
     ]);
     return { total, last24h, deviceCount, gatewayCount };
+  }
+
+  async statsInterval(): Promise<Record<string, number | null>> {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const raw = await this.model.aggregate([
+      { $match: { receivedAt: { $gte: since } } },
+      { $sort: { receivedAt: 1 } },
+      { $group: { _id: '$deviceEUI', timestamps: { $push: '$receivedAt' } } },
+    ]);
+    const result: Record<string, number | null> = {};
+    for (const r of raw) {
+      const times: Date[] = r.timestamps;
+      if (times.length < 2) {
+        result[r._id] = null;
+        continue;
+      }
+      let totalGapMs = 0;
+      for (let i = 1; i < times.length; i++) {
+        totalGapMs += new Date(times[i]).getTime() - new Date(times[i - 1]).getTime();
+      }
+      result[r._id] = Math.round(totalGapMs / (times.length - 1) / 1000);
+    }
+    return result;
   }
 }

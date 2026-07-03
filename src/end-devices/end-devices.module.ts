@@ -1,16 +1,20 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { EndDevicesService } from './end-devices.service';
 import { EndDevicesController } from './end-devices.controller';
 import { EndDevice, EndDeviceSchema } from './schemas/end-device.schema';
 import { MqttModule } from '../mqtt/mqtt.module';
 import { WebsocketModule } from '../websocket/websocket.module';
+import { GatewaysModule } from '../gateways/gateways.module';
+import { KerlinkModule } from '../kerlink/kerlink.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: EndDevice.name, schema: EndDeviceSchema }]),
     MqttModule,
     WebsocketModule,
+    GatewaysModule,
+    forwardRef(() => KerlinkModule),
   ],
   providers: [EndDevicesService],
   controllers: [EndDevicesController],

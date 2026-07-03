@@ -12,4 +12,5 @@ export class CreateGatewayDto {
   @IsOptional() @IsNumber() @Type(() => Number) altitude?: number;
   @IsOptional() @IsString() placement?: string;
   @IsOptional() @IsEnum(['manual', 'inherited']) locationType?: string;
+  @IsOptional() @IsEnum(['chirpstack', 'kerlink']) protocol?: string;
 }

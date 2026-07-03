@@ -6,6 +6,8 @@ import * as crypto from 'crypto';
 import { UplinkMessagesService } from '../uplinks/uplinks.service';
 import { EndDevicesService } from '../end-devices/end-devices.service';
 import { GatewaysService } from '../gateways/gateways.service';
+import { aesCmac, cryptPayload } from './lorawan-crypto.util';
+import { KerlinkDownlinkService } from './kerlink-downlink.service';
 
 const PKT_PUSH_DATA = 0x00;
 const PKT_PUSH_ACK  = 0x01;
@@ -22,15 +24,13 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
   private server: dgram.Socket | null = null;
   private offlineTimer: NodeJS.Timeout | null = null;
 
-  /** Last gateway that sent PULL_DATA — used to push Join Accept downlinks */
-  private gatewayDownlink: { address: string; port: number } | null = null;
-
   constructor(
     private config: ConfigService,
     private uplinkService: UplinkMessagesService,
     private endDevicesService: EndDevicesService,
     private eventEmitter: EventEmitter2,
     private gatewaysService: GatewaysService,
+    private downlinkService: KerlinkDownlinkService,
   ) {}
 
   onModuleInit() {
@@ -52,6 +52,7 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.server.bind(port);
+    this.downlinkService.registerSocket(this.server);
 
     this.offlineTimer = setInterval(() => {
       this.gatewaysService.markStaleOffline(OFFLINE_THRESHOLD_MS).catch(err =>
@@ -75,7 +76,7 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     const pktType  = msg.readUInt8(3);
 
     if (pktType === PKT_PULL_DATA) {
-      this.gatewayDownlink = { address: rinfo.address, port: rinfo.port };
+      this.downlinkService.registerGatewayPath(rinfo.address, rinfo.port);
       this.logger.debug(`PULL_DATA from ${rinfo.address}:${rinfo.port}`);
 
       const ack = Buffer.alloc(4);
@@ -146,7 +147,7 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
 
       if (dev?.appSKey) {
         try {
-          rawData = this.decryptPayload(dev.appSKey, parsed.devAddrLE, parsed.fCnt32, 0, parsed.frmPayload);
+          rawData = cryptPayload(dev.appSKey, parsed.devAddrLE, parsed.fCnt32, 0, parsed.frmPayload);
           decodedData = {
             hex:   rawData.toString('hex'),
             ascii: rawData.toString('utf8').replace(/[^\x20-\x7E]/g, '.'),
@@ -227,8 +228,8 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     const appKey = Buffer.from(dev.appKey, 'hex');
     const nwkKey = dev.nwkKey ? Buffer.from(dev.nwkKey, 'hex') : appKey;
 
-    const micApp = this.aesCmac(appKey, joinReq.raw.slice(0, 19)).slice(0, 4);
-    const micNwk = this.aesCmac(nwkKey, joinReq.raw.slice(0, 19)).slice(0, 4);
+    const micApp = aesCmac(appKey, joinReq.raw.slice(0, 19)).slice(0, 4);
+    const micNwk = aesCmac(nwkKey, joinReq.raw.slice(0, 19)).slice(0, 4);
 
     let joinKey: Buffer;
     if (micNwk.equals(joinReq.mic)) {
@@ -272,7 +273,7 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     ]);
 
     const mhdr = Buffer.from([0x20]);
-    const mic  = this.aesCmac(joinKey, Buffer.concat([mhdr, payload])).slice(0, 4);
+    const mic  = aesCmac(joinKey, Buffer.concat([mhdr, payload])).slice(0, 4);
     const plain = Buffer.concat([payload, mic]);
 
     // LoRaWAN: Join Accept body is encrypted with AES-128 decrypt
@@ -296,7 +297,8 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
   }
 
   private sendJoinAccept(pkt: any, phyPayload: Buffer) {
-    if (!this.gatewayDownlink) {
+    const gatewayDownlink = this.downlinkService.getGatewayPath();
+    if (!gatewayDownlink) {
       this.logger.warn('JoinAccept: no PULL_DATA gateway path available');
       return;
     }
@@ -326,63 +328,8 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     down.writeUInt8(PKT_PULL_RESP, 3);
     json.copy(down, 4);
 
-    this.server!.send(down, this.gatewayDownlink.port, this.gatewayDownlink.address);
-    this.logger.log(`JoinAccept sent via ${this.gatewayDownlink.address}:${this.gatewayDownlink.port}`);
-  }
-
-  // ─── AES-CMAC ────────────────────────────────────────────────────────────────
-
-  private aesCmac(key: Buffer, message: Buffer): Buffer {
-    const Rb   = 0x87;
-    const zero = Buffer.alloc(16, 0);
-
-    const aesEnc = (k: Buffer, d: Buffer) => {
-      const c = crypto.createCipheriv('aes-128-ecb', k, null);
-      c.setAutoPadding(false);
-      return Buffer.concat([c.update(d), c.final()]);
-    };
-
-    const shiftLeft = (b: Buffer): Buffer => {
-      const out = Buffer.alloc(16);
-      let carry = 0;
-      for (let i = 15; i >= 0; i--) {
-        out[i] = ((b[i] << 1) & 0xff) | carry;
-        carry  = b[i] & 0x80 ? 1 : 0;
-      }
-      return out;
-    };
-
-    const xor16 = (a: Buffer, b: Buffer): Buffer => {
-      const out = Buffer.alloc(16);
-      for (let i = 0; i < 16; i++) out[i] = a[i] ^ b[i];
-      return out;
-    };
-
-    const L  = aesEnc(key, zero);
-    let K1   = shiftLeft(L);
-    if (L[0] & 0x80) K1[15] ^= Rb;
-    let K2   = shiftLeft(K1);
-    if (K1[0] & 0x80) K2[15] ^= Rb;
-
-    const n            = Math.max(1, Math.ceil(message.length / 16));
-    const lastComplete = message.length > 0 && message.length % 16 === 0;
-
-    let lastBlock: Buffer;
-    if (lastComplete) {
-      lastBlock = xor16(message.slice((n - 1) * 16, n * 16), K1);
-    } else {
-      const padded = Buffer.alloc(16, 0);
-      const last   = message.slice((n - 1) * 16);
-      last.copy(padded);
-      padded[last.length] = 0x80;
-      lastBlock = xor16(padded, K2);
-    }
-
-    let X = Buffer.alloc(16, 0);
-    for (let i = 0; i < n - 1; i++) {
-      X = aesEnc(key, xor16(X, message.slice(i * 16, i * 16 + 16)));
-    }
-    return aesEnc(key, xor16(X, lastBlock));
+    this.server!.send(down, gatewayDownlink.port, gatewayDownlink.address);
+    this.logger.log(`JoinAccept sent via ${gatewayDownlink.address}:${gatewayDownlink.port}`);
   }
 
   // ─── LoRaWAN uplink parse ─────────────────────────────────────────────────────
@@ -451,35 +398,6 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     }
 
     return { dataRate, codingRate, modulation, spreadingFactor, bandwidth, channel };
-  }
-
-  // ─── Payload decrypt ─────────────────────────────────────────────────────────
-
-  private decryptPayload(appSKeyHex: string, devAddrLE: Buffer, fCnt32: number, dir: number, payload: Buffer): Buffer {
-    const key = Buffer.from(appSKeyHex, 'hex');
-    if (key.length !== 16) throw new Error('AppSKey must be 16 bytes');
-
-    const out    = Buffer.alloc(payload.length);
-    const blocks = Math.ceil(payload.length / 16);
-
-    for (let i = 1; i <= blocks; i++) {
-      const Ai = Buffer.alloc(16, 0);
-      Ai[0] = 0x01;
-      Ai[5] = dir & 0x01;
-      devAddrLE.copy(Ai, 6);
-      Ai.writeUInt32LE(fCnt32 >>> 0, 10);
-      Ai[15] = i & 0xff;
-
-      const cipher = crypto.createCipheriv('aes-128-ecb', key, null);
-      cipher.setAutoPadding(false);
-      const Si = Buffer.concat([cipher.update(Ai), cipher.final()]);
-
-      const start = (i - 1) * 16;
-      const end   = Math.min(start + 16, payload.length);
-      for (let j = start; j < end; j++) out[j] = payload[j] ^ Si[j - start];
-    }
-
-    return out;
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────

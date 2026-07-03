@@ -27,6 +27,12 @@ export class UplinkMessagesController {
     return this.service.statsSummary();
   }
 
+  @Get('stats/interval')
+  @Roles('viewer')
+  statsInterval() {
+    return this.service.statsInterval();
+  }
+
   @Get()
   @Roles('viewer')
   findAll(

@@ -83,6 +83,10 @@ export class GatewaysService {
     if (!doc) throw new NotFoundException('Gateway not found');
   }
 
+  findByEui(eui: string) {
+    return this.model.findOne({ eui }).exec();
+  }
+
   async markSeen(eui: string) {
     await this.model.findOneAndUpdate(
       { eui },

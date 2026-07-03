@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { EndDevice, EndDeviceDocument } from './schemas/end-device.schema';
@@ -8,6 +8,8 @@ import { SendDownlinkDto } from './dto/send-downlink.dto';
 import { UpdateShareDto } from './dto/update-share.dto';
 import { MqttService } from '../mqtt/mqtt.service';
 import { EventsGateway } from '../websocket/events.gateway';
+import { GatewaysService } from '../gateways/gateways.service';
+import { KerlinkDownlinkService } from '../kerlink/kerlink-downlink.service';
 
 @Injectable()
 export class EndDevicesService {
@@ -15,6 +17,8 @@ export class EndDevicesService {
     @InjectModel(EndDevice.name) private model: Model<EndDeviceDocument>,
     private mqttService: MqttService,
     private eventsGateway: EventsGateway,
+    private gatewaysService: GatewaysService,
+    @Inject(forwardRef(() => KerlinkDownlinkService)) private kerlinkDownlinkService: KerlinkDownlinkService,
   ) {}
 
   create(dto: CreateEndDeviceDto) {
@@ -59,6 +63,21 @@ export class EndDevicesService {
   async sendDownlink(id: string, dto: SendDownlinkDto) {
     const device = await this.model.findById(id).exec();
     if (!device) throw new NotFoundException('End device not found');
+
+    const lastGatewayEUI = device.connectedGateways[device.connectedGateways.length - 1]?.gatewayEUI;
+    const gateway = lastGatewayEUI ? await this.gatewaysService.findByEui(lastGatewayEUI) : null;
+
+    if (gateway?.protocol === 'kerlink') {
+      await this.kerlinkDownlinkService.sendDataDownlink(
+        device,
+        dto.fPort,
+        Buffer.from(dto.payload, 'base64'),
+        dto.confirmed ?? false,
+      );
+      await this.model.findByIdAndUpdate(id, { $inc: { fCntDown: 1 } }).exec();
+      return { queued: true, devEUI: device.devEUI, fPort: dto.fPort };
+    }
+
     // Publish downlink via MQTT (chirpstack format)
     const topic = `application/default/device/${device.devEUI}/command/down`;
     const payload = JSON.stringify({

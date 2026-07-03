@@ -39,6 +39,7 @@ export class EndDevice {
   @Prop({ default: 0 }) rssi: number;
   @Prop() lastSeen: Date;
   @Prop({ default: 0 }) fCntUp: number;
+  @Prop({ default: 0 }) fCntDown: number;
   @Prop() devAddr: string;
   @Prop() appSKey: string;
   @Prop() nwkSKey: string;
