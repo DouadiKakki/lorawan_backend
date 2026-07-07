@@ -18,6 +18,8 @@ export class EndDevicesController {
   @Post() @Roles('operator') create(@Body() dto: CreateEndDeviceDto) { return this.service.create(dto); }
   @Put(':id') @Roles('operator') update(@Param('id') id: string, @Body() dto: UpdateEndDeviceDto) { return this.service.update(id, dto); }
   @Delete(':id') @Roles('admin') remove(@Param('id') id: string) { return this.service.remove(id); }
+  @Put(':id/deactivate') @Roles('operator') deactivate(@Param('id') id: string) { return this.service.deactivate(id); }
+  @Put(':id/activate') @Roles('operator') activate(@Param('id') id: string) { return this.service.activate(id); }
   @Post(':id/downlink') @Roles('operator') sendDownlink(@Param('id') id: string, @Body() dto: SendDownlinkDto) { return this.service.sendDownlink(id, dto); }
   @Put(':id/share') @Roles('operator') updateShare(@Param('id') id: string, @Body() dto: UpdateShareDto) { return this.service.updateShare(id, dto); }
 }

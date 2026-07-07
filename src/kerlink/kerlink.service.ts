@@ -216,6 +216,10 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(`Join: DevEUI ${joinReq.devEUI} not registered`);
       return;
     }
+    if (dev.disabled) {
+      this.logger.warn(`Join: DevEUI ${joinReq.devEUI} is deactivated`);
+      return;
+    }
     if (!dev.appKey) {
       this.logger.warn(`Join: DevEUI ${joinReq.devEUI} has no appKey`);
       return;

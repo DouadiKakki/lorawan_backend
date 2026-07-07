@@ -42,6 +42,24 @@ export class EndDevicesService {
     if (!doc) throw new NotFoundException('End device not found');
   }
 
+  async deactivate(id: string) {
+    const doc = await this.model.findByIdAndUpdate(id, {
+      $set: { disabled: true, status: 'inactive', fCntUp: 0, fCntDown: 0, connectedGateways: [] },
+      $unset: { devAddr: 1, appSKey: 1, nwkSKey: 1, fNwkSIntKey: 1, sNwkSIntKey: 1, nwkSEncKey: 1, sessionStart: 1 },
+    }, { new: true }).exec();
+    if (!doc) throw new NotFoundException('End device not found');
+    return doc;
+  }
+
+  async activate(id: string) {
+    const doc = await this.model.findByIdAndUpdate(id, {
+      disabled: false,
+      status: 'inactive',
+    }, { new: true }).exec();
+    if (!doc) throw new NotFoundException('End device not found');
+    return doc;
+  }
+
   findByDevAddr(devAddr: string): Promise<EndDeviceDocument | null> {
     return this.model.findOne({ devAddr: devAddr.toLowerCase() }).exec();
   }
@@ -104,6 +122,9 @@ export class EndDevicesService {
   }
 
   async markSeen(devAddr: string, gatewayEUI: string, rssi: number, fCntUp?: number) {
+    const existing = await this.model.findOne({ devAddr: devAddr.toLowerCase() }).exec();
+    if (!existing || existing.disabled) return;
+
     await this.model.findOneAndUpdate(
       { devAddr: devAddr.toLowerCase() },
       { $pull: { connectedGateways: { gatewayEUI } } },

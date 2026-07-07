@@ -35,6 +35,7 @@ export class EndDevice {
   @Prop({ type: Types.ObjectId, ref: 'Application' }) applicationId: Types.ObjectId;
   @Prop({ type: Types.ObjectId, ref: 'Company' }) companyId: Types.ObjectId;
   @Prop({ required: true, enum: ['active', 'inactive'], default: 'active' }) status: string;
+  @Prop({ default: false }) disabled: boolean;
   @Prop({ default: 0 }) battery: number;
   @Prop({ default: 0 }) rssi: number;
   @Prop() lastSeen: Date;
@@ -61,6 +62,12 @@ export class EndDevice {
   @Prop({ default: false }) supportsClassC: boolean;
   @Prop({ default: 'OTAA', enum: ['OTAA', 'ABP', 'Multicast'] }) activationMode: string;
   @Prop({ default: true }) resetsJoinNonces: boolean;
+  @Prop({ default: true }) useNetworkDefaults: boolean;
+  @Prop({ default: false }) skipJoinServer: boolean;
+  // Location
+  @Prop({ default: 'inherited', enum: ['inherited', 'manual'] }) locationType: string;
+  @Prop() latitude: number;
+  @Prop() longitude: number;
   // Sharing
   @Prop({ type: [CollaboratorSchema], default: [] }) collaborators: Collaborator[];
   @Prop({ type: [SharedCompanySchema], default: [] }) sharedCompanies: SharedCompany[];

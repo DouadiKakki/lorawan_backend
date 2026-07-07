@@ -23,6 +23,11 @@ export class CreateEndDeviceDto {
   @IsOptional() @IsBoolean() supportsClassC?: boolean;
   @IsOptional() @IsEnum(['OTAA', 'ABP', 'Multicast']) activationMode?: string;
   @IsOptional() @IsBoolean() resetsJoinNonces?: boolean;
+  @IsOptional() @IsBoolean() useNetworkDefaults?: boolean;
+  @IsOptional() @IsBoolean() skipJoinServer?: boolean;
+  @IsOptional() @IsEnum(['inherited', 'manual']) locationType?: string;
+  @IsOptional() @IsNumber() latitude?: number;
+  @IsOptional() @IsNumber() longitude?: number;
   @IsOptional() @IsEnum(['none', 'javascript', 'cayennelpp']) payloadFormatterType?: string;
   @IsOptional() @IsString() payloadFormatterCode?: string;
 }
