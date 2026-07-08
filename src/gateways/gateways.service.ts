@@ -95,12 +95,15 @@ export class GatewaysService {
     const existing = await this.model.findOne({ eui }).exec();
     if (!existing) return;
 
-    await this.model.findOneAndUpdate(
+    const updated = await this.model.findOneAndUpdate(
       { eui },
       { status: 'online', lastSeen: new Date() },
+      { new: true },
     ).exec();
 
     if (existing.status === 'offline') {
+      this.eventsGateway.emitGatewayStatus(updated);
+
       const notification = await this.notificationsService.create(
         'success',
         'Gateway Reconnected',
@@ -125,6 +128,8 @@ export class GatewaysService {
     ).exec();
 
     for (const gateway of staleGateways) {
+      this.eventsGateway.emitGatewayStatus({ ...gateway.toObject(), status: 'offline' });
+
       const notification = await this.notificationsService.create(
         'warning',
         'Gateway Offline',
