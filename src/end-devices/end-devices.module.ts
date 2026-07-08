@@ -7,6 +7,7 @@ import { MqttModule } from '../mqtt/mqtt.module';
 import { WebsocketModule } from '../websocket/websocket.module';
 import { GatewaysModule } from '../gateways/gateways.module';
 import { KerlinkModule } from '../kerlink/kerlink.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { KerlinkModule } from '../kerlink/kerlink.module';
     WebsocketModule,
     GatewaysModule,
     forwardRef(() => KerlinkModule),
+    NotificationsModule,
   ],
   providers: [EndDevicesService],
   controllers: [EndDevicesController],

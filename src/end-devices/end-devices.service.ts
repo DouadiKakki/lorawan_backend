@@ -10,6 +10,7 @@ import { MqttService } from '../mqtt/mqtt.service';
 import { EventsGateway } from '../websocket/events.gateway';
 import { GatewaysService } from '../gateways/gateways.service';
 import { KerlinkDownlinkService } from '../kerlink/kerlink-downlink.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class EndDevicesService {
@@ -19,6 +20,7 @@ export class EndDevicesService {
     private eventsGateway: EventsGateway,
     private gatewaysService: GatewaysService,
     @Inject(forwardRef(() => KerlinkDownlinkService)) private kerlinkDownlinkService: KerlinkDownlinkService,
+    private notificationsService: NotificationsService,
   ) {}
 
   create(dto: CreateEndDeviceDto) {
@@ -35,6 +37,16 @@ export class EndDevicesService {
     if (dto.devAddr) dto.devAddr = dto.devAddr.toLowerCase();
     const doc = await this.model.findByIdAndUpdate(id, dto, { new: true }).exec();
     if (!doc) throw new NotFoundException('End device not found');
+
+    if (dto.battery !== undefined && dto.battery < 20) {
+      const notification = await this.notificationsService.create(
+        'warning',
+        'Low Battery Alert',
+        `${doc.name} battery level is at ${dto.battery}%`,
+      );
+      this.eventsGateway.emitNotification(notification);
+    }
+
     return doc;
   }
   async remove(id: string) {
@@ -125,6 +137,8 @@ export class EndDevicesService {
     const existing = await this.model.findOne({ devAddr: devAddr.toLowerCase() }).exec();
     if (!existing || existing.disabled) return;
 
+    const wasInactive = existing.status !== 'active';
+
     await this.model.findOneAndUpdate(
       { devAddr: devAddr.toLowerCase() },
       { $pull: { connectedGateways: { gatewayEUI } } },
@@ -141,6 +155,17 @@ export class EndDevicesService {
       update,
       { new: true },
     ).exec();
-    if (doc) this.eventsGateway.emitDeviceStatus(doc);
+    if (doc) {
+      this.eventsGateway.emitDeviceStatus(doc);
+
+      if (wasInactive) {
+        const notification = await this.notificationsService.create(
+          'success',
+          'Device Connected',
+          `${doc.name} successfully connected`,
+        );
+        this.eventsGateway.emitNotification(notification);
+      }
+    }
   }
 }
