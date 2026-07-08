@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
@@ -23,19 +23,14 @@ export class UsersService {
   ) {}
 
   private async appendDevicesCount(users: UserDocument[]): Promise<any[]> {
-    const companyNames = [...new Set(users.map(u => u.company).filter(Boolean))];
-    const companies = await this.companyModel.find({ name: { $in: companyNames } }).select('_id name').exec();
-    const companyIdsByName = new Map(companies.map(c => [c.name, c._id]));
-
+    const companyIds = [...new Set(users.map(u => u.companyId?.toString()).filter(Boolean))];
     const companyCounts = new Map<string, number>();
-    for (const company of companies) {
-      const count = await this.endDeviceModel.countDocuments({ companyId: company._id }).exec();
-      companyCounts.set(company._id.toString(), count);
+    for (const companyId of companyIds) {
+      const count = await this.endDeviceModel.countDocuments({ companyId }).exec();
+      companyCounts.set(companyId, count);
     }
-
     return users.map(u => {
-      const companyId = u.company ? companyIdsByName.get(u.company) : null;
-      const devicesCount = companyId ? (companyCounts.get(companyId.toString()) ?? 0) : 0;
+      const devicesCount = u.companyId ? (companyCounts.get(u.companyId.toString()) ?? 0) : 0;
       return { ...u.toObject(), devicesCount };
     });
   }
@@ -43,8 +38,17 @@ export class UsersService {
   async create(dto: CreateUserDto): Promise<UserDocument> {
     const existing = await this.userModel.findOne({ email: dto.email.toLowerCase() });
     if (existing) throw new ConflictException('Email already in use');
+
+    let companyId = dto.companyId;
+    if (dto.role === 'Super Admin') {
+      const rootCompany = await this.companyModel.findOne({ isRoot: true });
+      companyId = rootCompany?._id?.toString();
+    } else if (!companyId) {
+      throw new BadRequestException('Company is required');
+    }
+
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const user = new this.userModel({ ...dto, passwordHash, status: 'pending' });
+    const user = new this.userModel({ ...dto, companyId, passwordHash, status: 'pending' });
     const saved = await user.save();
 
     const token = this.jwtService.sign(

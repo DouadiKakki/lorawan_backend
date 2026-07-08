@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export type UserDocument = User & Document;
 
@@ -10,7 +10,7 @@ export class User {
   @Prop({ required: true }) passwordHash: string;
   @Prop({ required: true, enum: ['admin', 'operator', 'viewer', 'Super Admin'], default: 'viewer' }) role: string;
   @Prop({ required: true, enum: ['active', 'inactive', 'pending'], default: 'active' }) status: string;
-  @Prop() company: string;
+  @Prop({ type: Types.ObjectId, ref: 'Company' }) companyId: Types.ObjectId;
   @Prop() lastLogin: Date;
 }
 

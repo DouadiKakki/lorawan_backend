@@ -19,11 +19,11 @@ export class AuthService {
     const user = await this.usersService.create({
       name: dto.name,
       email: dto.email,
-      company: dto.company,
+      companyId: dto.companyId,
       password: dto.password,
       role: 'viewer',
     });
-    return this.generateTokens({ sub: user._id.toString(), email: user.email, role: user.role });
+    return this.generateTokens({ sub: user._id.toString(), email: user.email, role: user.role, companyId: user.companyId?.toString() ?? null });
   }
 
   async login(dto: LoginDto) {
@@ -33,7 +33,7 @@ export class AuthService {
     if (!valid) throw new UnauthorizedException('Invalid credentials');
     if (user.status !== 'active') throw new UnauthorizedException('Please confirm your email before logging in.');
     await this.usersService.updateLastLogin(user._id.toString());
-    return this.generateTokens({ sub: user._id.toString(), email: user.email, role: user.role });
+    return this.generateTokens({ sub: user._id.toString(), email: user.email, role: user.role, companyId: user.companyId?.toString() ?? null });
   }
 
   async refresh(payload: JwtPayload) {
