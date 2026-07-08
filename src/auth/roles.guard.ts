@@ -2,7 +2,7 @@ import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from './roles.decorator';
 
-const ROLE_HIERARCHY = { admin: 3, operator: 2, viewer: 1 };
+const ROLE_HIERARCHY = { 'Super Admin': 4, admin: 3, operator: 2, viewer: 1 };
 
 @Injectable()
 export class RolesGuard implements CanActivate {

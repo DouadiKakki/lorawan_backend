@@ -3,5 +3,5 @@ import { IsEnum, IsOptional } from 'class-validator';
 import { CreateUserDto } from './create-user.dto';
 
 export class UpdateUserDto extends PartialType(CreateUserDto) {
-  @IsOptional() @IsEnum(['active', 'inactive']) status?: string;
+  @IsOptional() @IsEnum(['active', 'inactive', 'pending']) status?: string;
 }
