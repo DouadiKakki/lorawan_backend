@@ -15,6 +15,7 @@ import { WebsocketModule } from './websocket/websocket.module';
 import { StorageModule } from './storage/storage.module';
 import { KerlinkModule } from './kerlink/kerlink.module';
 import { AppConfigModule } from './config/config.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { AppConfigModule } from './config/config.module';
     StorageModule,
     KerlinkModule,
     AppConfigModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}
