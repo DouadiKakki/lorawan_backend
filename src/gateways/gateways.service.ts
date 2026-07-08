@@ -119,6 +119,7 @@ export class GatewaysService {
         'success',
         'Gateway Reconnected',
         `${existing.name} is back online`,
+        existing.companyId?.toString() ?? null,
       );
       this.eventsGateway.emitNotification(notification);
     }
@@ -145,6 +146,7 @@ export class GatewaysService {
         'warning',
         'Gateway Offline',
         `${gateway.name} has been offline since ${gateway.lastSeen?.toLocaleString() ?? 'unknown'}`,
+        gateway.companyId?.toString() ?? null,
       );
       this.eventsGateway.emitNotification(notification);
     }

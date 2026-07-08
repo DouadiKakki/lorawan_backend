@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { UplinkMessagesService } from './uplinks.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -36,6 +36,7 @@ export class UplinkMessagesController {
   @Get()
   @Roles('viewer')
   findAll(
+    @Req() req: any,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('deviceEUI') deviceEUI?: string,
@@ -43,6 +44,7 @@ export class UplinkMessagesController {
     @Query('gatewayEUI') gatewayEUI?: string,
   ) {
     return this.service.findAll(
+      req.user,
       page ? parseInt(page, 10) : 1,
       limit ? parseInt(limit, 10) : 50,
       deviceEUI,

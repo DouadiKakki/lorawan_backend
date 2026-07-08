@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export type IntegrationDocument = Integration & Document;
 
@@ -12,6 +12,7 @@ export class Integration {
   @Prop({ default: '' }) apiKey: string;
   @Prop({ default: 0 }) events: number;
   @Prop() lastSync: Date;
+  @Prop({ type: Types.ObjectId, ref: 'Company', required: true }) companyId: Types.ObjectId;
 }
 
 export const IntegrationSchema = SchemaFactory.createForClass(Integration);

@@ -56,6 +56,7 @@ export class EndDevicesService {
         'warning',
         'Low Battery Alert',
         `${doc.name} battery level is at ${dto.battery}%`,
+        doc.companyId?.toString() ?? null,
       );
       this.eventsGateway.emitNotification(notification);
     }
@@ -179,6 +180,7 @@ export class EndDevicesService {
           'success',
           'Device Connected',
           `${doc.name} successfully connected`,
+          doc.companyId?.toString() ?? null,
         );
         this.eventsGateway.emitNotification(notification);
       }

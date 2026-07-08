@@ -2,10 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { UplinkMessage, UplinkMessageDocument } from './schemas/uplink-message.schema';
+import { Application, ApplicationDocument } from '../applications/schemas/application.schema';
+import { companyFilter } from '../auth/company-scope.util';
 
 @Injectable()
 export class UplinkMessagesService {
-  constructor(@InjectModel(UplinkMessage.name) private model: Model<UplinkMessageDocument>) {}
+  constructor(
+    @InjectModel(UplinkMessage.name) private model: Model<UplinkMessageDocument>,
+    @InjectModel(Application.name) private applicationModel: Model<ApplicationDocument>,
+  ) {}
 
   async create(data: Partial<UplinkMessage>): Promise<UplinkMessageDocument> {
     return new this.model(data).save();
@@ -32,11 +37,15 @@ export class UplinkMessagesService {
     return { ...rest, dataHex: dataHex || undefined };
   }
 
-  async findAll(page = 1, limit = 50, deviceEUI?: string, applicationId?: string, gatewayEUI?: string) {
+  async findAll(user: { role: string; companyId: string | null }, page = 1, limit = 50, deviceEUI?: string, applicationId?: string, gatewayEUI?: string) {
     const filter: any = {};
     if (deviceEUI) filter.deviceEUI = deviceEUI;
     if (applicationId) filter.applicationId = applicationId;
     if (gatewayEUI) filter.gatewayEUI = gatewayEUI;
+    if (user.role !== 'Super Admin') {
+      const appIds = await this.applicationModel.find(companyFilter(user)).distinct('_id').exec();
+      filter.applicationId = filter.applicationId ? filter.applicationId : { $in: appIds };
+    }
     const skip = (page - 1) * limit;
     const [docs, total] = await Promise.all([
       this.model.find(filter).sort({ receivedAt: -1 }).skip(skip).limit(limit).exec(),

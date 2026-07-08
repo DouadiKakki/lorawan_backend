@@ -114,3 +114,42 @@ describe('UsersService.create — company requirement', () => {
     await expect(service.create(dto)).resolves.toBeDefined();
   });
 });
+
+describe('UsersService.findAll — company scoping and Super Admin visibility', () => {
+  let service: UsersService;
+  let userModel: any;
+
+  beforeEach(async () => {
+    const mockUsers = [
+      { _id: 'u1', name: 'Regular User', role: 'viewer', companyId: 'company-a', toObject() { return this; } },
+      { _id: 'u2', name: 'Root Admin', role: 'Super Admin', companyId: 'root-id', toObject() { return this; } },
+    ];
+    userModel = {
+      find: jest.fn().mockReturnValue({ select: () => ({ exec: () => Promise.resolve(mockUsers) }) }),
+    };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        UsersService,
+        { provide: getModelToken(User.name), useValue: userModel },
+        { provide: getModelToken(EndDevice.name), useValue: { countDocuments: () => ({ exec: () => Promise.resolve(0) }) } },
+        { provide: getModelToken(Company.name), useValue: {} },
+        { provide: MailService, useValue: {} },
+        { provide: JwtService, useValue: {} },
+        { provide: ConfigService, useValue: { get: () => 'x' } },
+      ],
+    }).compile();
+
+    service = moduleRef.get(UsersService);
+  });
+
+  it('excludes Super Admin users and applies companyFilter for a non-Super-Admin requester', async () => {
+    await service.findAll({ role: 'admin', companyId: 'company-a' });
+    expect(userModel.find).toHaveBeenCalledWith({ companyId: 'company-a', role: { $ne: 'Super Admin' } });
+  });
+
+  it('includes everyone with no company filter for a Super Admin requester', async () => {
+    await service.findAll({ role: 'Super Admin', companyId: 'root-id' });
+    expect(userModel.find).toHaveBeenCalledWith({});
+  });
+});

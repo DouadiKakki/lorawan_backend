@@ -10,6 +10,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { EndDevice, EndDeviceDocument } from '../end-devices/schemas/end-device.schema';
 import { Company, CompanyDocument } from '../companies/schemas/company.schema';
 import { MailService } from '../mail/mail.service';
+import { companyFilter } from '../auth/company-scope.util';
 
 @Injectable()
 export class UsersService {
@@ -61,15 +62,19 @@ export class UsersService {
     return saved;
   }
 
-  async findAll(): Promise<any[]> {
-    const users = await this.userModel.find().select('-passwordHash').exec();
+  async findAll(user: { role: string; companyId: string | null }): Promise<any[]> {
+    const filter = { ...companyFilter(user) };
+    if (user.role !== 'Super Admin') filter.role = { $ne: 'Super Admin' };
+    const users = await this.userModel.find(filter).select('-passwordHash').exec();
     return this.appendDevicesCount(users);
   }
 
-  async findOne(id: string): Promise<any> {
-    const user = await this.userModel.findById(id).select('-passwordHash').exec();
-    if (!user) throw new NotFoundException('User not found');
-    const [result] = await this.appendDevicesCount([user]);
+  async findOne(id: string, user: { role: string; companyId: string | null }): Promise<any> {
+    const filter: any = { _id: id, ...companyFilter(user) };
+    if (user.role !== 'Super Admin') filter.role = { $ne: 'Super Admin' };
+    const found = await this.userModel.findOne(filter).select('-passwordHash').exec();
+    if (!found) throw new NotFoundException('User not found');
+    const [result] = await this.appendDevicesCount([found]);
     return result;
   }
 

@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Param, UseGuards, Req } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -9,7 +9,7 @@ import { Roles } from '../auth/roles.decorator';
 export class NotificationsController {
   constructor(private readonly service: NotificationsService) {}
 
-  @Get() @Roles('viewer') findAll() { return this.service.findAll(); }
+  @Get() @Roles('viewer') findAll(@Req() req: any) { return this.service.findAll(req.user); }
   @Patch(':id/read') @Roles('viewer') markRead(@Param('id') id: string) { return this.service.markRead(id); }
   @Patch('read-all') @Roles('viewer') markAllRead() { return this.service.markAllRead(); }
 }

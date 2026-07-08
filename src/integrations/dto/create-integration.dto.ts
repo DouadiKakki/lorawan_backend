@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsMongoId, IsOptional, IsString } from 'class-validator';
 
 export class CreateIntegrationDto {
   @IsString() name: string;
@@ -6,4 +6,5 @@ export class CreateIntegrationDto {
   @IsOptional() @IsEnum(['active', 'inactive']) status?: string;
   @IsOptional() @IsString() url?: string;
   @IsOptional() @IsString() apiKey?: string;
+  @IsMongoId() companyId: string;
 }
