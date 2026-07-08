@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { JwtModule } from '@nestjs/jwt';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { ConfirmController } from './confirm.controller';
@@ -16,6 +17,7 @@ import { MailModule } from '../mail/mail.module';
       { name: Company.name, schema: CompanySchema },
     ]),
     MailModule,
+    JwtModule.register({}),
   ],
   providers: [UsersService],
   controllers: [UsersController, ConfirmController],
