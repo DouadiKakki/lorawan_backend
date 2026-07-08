@@ -44,4 +44,8 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   emitDeviceStatus(device: any) {
     this.server.emit('device.status', device);
   }
+
+  emitNotification(notification: any) {
+    this.server.emit('notification.created', notification);
+  }
 }

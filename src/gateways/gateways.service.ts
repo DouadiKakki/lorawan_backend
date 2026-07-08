@@ -5,12 +5,16 @@ import { Gateway, GatewayDocument } from './schemas/gateway.schema';
 import { UplinkMessage } from '../uplinks/schemas/uplink-message.schema';
 import { CreateGatewayDto } from './dto/create-gateway.dto';
 import { UpdateGatewayDto } from './dto/update-gateway.dto';
+import { EventsGateway } from '../websocket/events.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class GatewaysService {
   constructor(
     @InjectModel(Gateway.name) private model: Model<GatewayDocument>,
     @InjectModel(UplinkMessage.name) private uplinkModel: Model<any>,
+    private eventsGateway: EventsGateway,
+    private notificationsService: NotificationsService,
   ) {}
 
   create(dto: CreateGatewayDto) {
@@ -88,17 +92,45 @@ export class GatewaysService {
   }
 
   async markSeen(eui: string) {
+    const existing = await this.model.findOne({ eui }).exec();
+    if (!existing) return;
+
     await this.model.findOneAndUpdate(
       { eui },
       { status: 'online', lastSeen: new Date() },
     ).exec();
+
+    if (existing.status === 'offline') {
+      const notification = await this.notificationsService.create(
+        'success',
+        'Gateway Reconnected',
+        `${existing.name} is back online`,
+      );
+      this.eventsGateway.emitNotification(notification);
+    }
   }
 
   async markStaleOffline(thresholdMs: number) {
     const cutoff = new Date(Date.now() - thresholdMs);
+    const staleGateways = await this.model.find({
+      status: 'online',
+      lastSeen: { $lt: cutoff },
+    }).exec();
+
+    if (staleGateways.length === 0) return;
+
     await this.model.updateMany(
       { status: 'online', lastSeen: { $lt: cutoff } },
       { status: 'offline' },
     ).exec();
+
+    for (const gateway of staleGateways) {
+      const notification = await this.notificationsService.create(
+        'warning',
+        'Gateway Offline',
+        `${gateway.name} has been offline since ${gateway.lastSeen?.toLocaleString() ?? 'unknown'}`,
+      );
+      this.eventsGateway.emitNotification(notification);
+    }
   }
 }
