@@ -92,4 +92,9 @@ export class UsersService {
   async updateLastLogin(id: string): Promise<void> {
     await this.userModel.findByIdAndUpdate(id, { lastLogin: new Date() }).exec();
   }
+
+  async confirmEmail(id: string): Promise<void> {
+    const user = await this.userModel.findByIdAndUpdate(id, { status: 'active' }).exec();
+    if (!user) throw new NotFoundException('User not found');
+  }
 }

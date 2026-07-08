@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
+import { ConfirmController } from './confirm.controller';
 import { User, UserSchema } from './schemas/user.schema';
 import { EndDevice, EndDeviceSchema } from '../end-devices/schemas/end-device.schema';
 import { Company, CompanySchema } from '../companies/schemas/company.schema';
@@ -17,7 +18,7 @@ import { MailModule } from '../mail/mail.module';
     MailModule,
   ],
   providers: [UsersService],
-  controllers: [UsersController],
+  controllers: [UsersController, ConfirmController],
   exports: [UsersService],
 })
 export class UsersModule {}
