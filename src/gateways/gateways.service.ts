@@ -7,6 +7,7 @@ import { CreateGatewayDto } from './dto/create-gateway.dto';
 import { UpdateGatewayDto } from './dto/update-gateway.dto';
 import { EventsGateway } from '../websocket/events.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { companyFilter } from '../auth/company-scope.util';
 
 @Injectable()
 export class GatewaysService {
@@ -22,8 +23,8 @@ export class GatewaysService {
     return new this.model(dto).save();
   }
 
-  async findAll() {
-    const gateways = await this.model.find().populate('companyId', 'name').lean().exec();
+  async findAll(user: { role: string; companyId: string | null }) {
+    const gateways = await this.model.find(companyFilter(user)).populate('companyId', 'name').lean().exec();
 
     const [counts, uptimeRows] = await Promise.all([
       this.uplinkModel.aggregate([
@@ -51,8 +52,8 @@ export class GatewaysService {
     });
   }
 
-  async findOne(id: string) {
-    const doc = await this.model.findById(id).populate('companyId', 'name').lean().exec();
+  async findOne(id: string, user: { role: string; companyId: string | null }) {
+    const doc = await this.model.findOne({ _id: id, ...companyFilter(user) }).populate('companyId', 'name').lean().exec();
     if (!doc) throw new NotFoundException('Gateway not found');
 
     const [countRows, uptimeRows] = await Promise.all([
@@ -76,13 +77,23 @@ export class GatewaysService {
 
     return { ...doc, devices, uptime };
   }
-  async update(id: string, dto: UpdateGatewayDto) {
+  async update(id: string, dto: UpdateGatewayDto, user: { role: string; companyId: string | null }) {
+    const existing = await this.model.findById(id).exec();
+    if (!existing) throw new NotFoundException('Gateway not found');
+    if (user.role !== 'Super Admin' && existing.companyId?.toString() !== user.companyId) {
+      throw new NotFoundException('Gateway not found');
+    }
     if (dto.eui) dto.eui = dto.eui.toUpperCase();
     const doc = await this.model.findByIdAndUpdate(id, dto, { new: true }).exec();
     if (!doc) throw new NotFoundException('Gateway not found');
     return doc;
   }
-  async remove(id: string) {
+  async remove(id: string, user: { role: string; companyId: string | null }) {
+    const existing = await this.model.findById(id).exec();
+    if (!existing) throw new NotFoundException('Gateway not found');
+    if (user.role !== 'Super Admin' && existing.companyId?.toString() !== user.companyId) {
+      throw new NotFoundException('Gateway not found');
+    }
     const doc = await this.model.findByIdAndDelete(id).exec();
     if (!doc) throw new NotFoundException('Gateway not found');
   }

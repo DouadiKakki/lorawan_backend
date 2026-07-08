@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, Req, UseGuards } from '@nestjs/common';
 import { EndDevicesService } from './end-devices.service';
 import { CreateEndDeviceDto } from './dto/create-end-device.dto';
 import { UpdateEndDeviceDto } from './dto/update-end-device.dto';
@@ -13,13 +13,13 @@ import { Roles } from '../auth/roles.decorator';
 export class EndDevicesController {
   constructor(private readonly service: EndDevicesService) {}
 
-  @Get() @Roles('viewer') findAll() { return this.service.findAll(); }
-  @Get(':id') @Roles('viewer') findOne(@Param('id') id: string) { return this.service.findOne(id); }
+  @Get() @Roles('viewer') findAll(@Req() req: any) { return this.service.findAll(req.user); }
+  @Get(':id') @Roles('viewer') findOne(@Param('id') id: string, @Req() req: any) { return this.service.findOne(id, req.user); }
   @Post() @Roles('operator') create(@Body() dto: CreateEndDeviceDto) { return this.service.create(dto); }
-  @Put(':id') @Roles('operator') update(@Param('id') id: string, @Body() dto: UpdateEndDeviceDto) { return this.service.update(id, dto); }
-  @Delete(':id') @Roles('admin') remove(@Param('id') id: string) { return this.service.remove(id); }
-  @Put(':id/deactivate') @Roles('operator') deactivate(@Param('id') id: string) { return this.service.deactivate(id); }
-  @Put(':id/activate') @Roles('operator') activate(@Param('id') id: string) { return this.service.activate(id); }
-  @Post(':id/downlink') @Roles('operator') sendDownlink(@Param('id') id: string, @Body() dto: SendDownlinkDto) { return this.service.sendDownlink(id, dto); }
-  @Put(':id/share') @Roles('operator') updateShare(@Param('id') id: string, @Body() dto: UpdateShareDto) { return this.service.updateShare(id, dto); }
+  @Put(':id') @Roles('operator') update(@Param('id') id: string, @Body() dto: UpdateEndDeviceDto, @Req() req: any) { return this.service.update(id, dto, req.user); }
+  @Delete(':id') @Roles('admin') remove(@Param('id') id: string, @Req() req: any) { return this.service.remove(id, req.user); }
+  @Put(':id/deactivate') @Roles('operator') deactivate(@Param('id') id: string, @Req() req: any) { return this.service.deactivate(id, req.user); }
+  @Put(':id/activate') @Roles('operator') activate(@Param('id') id: string, @Req() req: any) { return this.service.activate(id, req.user); }
+  @Post(':id/downlink') @Roles('operator') sendDownlink(@Param('id') id: string, @Body() dto: SendDownlinkDto, @Req() req: any) { return this.service.sendDownlink(id, dto, req.user); }
+  @Put(':id/share') @Roles('operator') updateShare(@Param('id') id: string, @Body() dto: UpdateShareDto, @Req() req: any) { return this.service.updateShare(id, dto, req.user); }
 }

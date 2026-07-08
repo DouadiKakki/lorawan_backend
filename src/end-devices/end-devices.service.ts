@@ -11,6 +11,7 @@ import { EventsGateway } from '../websocket/events.gateway';
 import { GatewaysService } from '../gateways/gateways.service';
 import { KerlinkDownlinkService } from '../kerlink/kerlink-downlink.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { companyFilter } from '../auth/company-scope.util';
 
 @Injectable()
 export class EndDevicesService {
@@ -23,17 +24,29 @@ export class EndDevicesService {
     private notificationsService: NotificationsService,
   ) {}
 
+  private async checkOwnership(id: string, user: { role: string; companyId: string | null }): Promise<EndDeviceDocument> {
+    const doc = await this.model.findById(id).exec();
+    if (!doc) throw new NotFoundException('End device not found');
+    if (user.role !== 'Super Admin' && doc.companyId?.toString() !== user.companyId) {
+      throw new NotFoundException('End device not found');
+    }
+    return doc;
+  }
+
   create(dto: CreateEndDeviceDto) {
     if (dto.devAddr) dto.devAddr = dto.devAddr.toLowerCase();
     return new this.model(dto).save();
   }
-  findAll() { return this.model.find().populate('applicationId', 'name').populate('companyId', 'name').exec(); }
-  async findOne(id: string) {
-    const doc = await this.model.findById(id).populate('applicationId', 'name').populate('companyId', 'name').exec();
+  findAll(user: { role: string; companyId: string | null }) {
+    return this.model.find(companyFilter(user)).populate('applicationId', 'name').populate('companyId', 'name').exec();
+  }
+  async findOne(id: string, user: { role: string; companyId: string | null }) {
+    const doc = await this.model.findOne({ _id: id, ...companyFilter(user) }).populate('applicationId', 'name').populate('companyId', 'name').exec();
     if (!doc) throw new NotFoundException('End device not found');
     return doc;
   }
-  async update(id: string, dto: UpdateEndDeviceDto) {
+  async update(id: string, dto: UpdateEndDeviceDto, user: { role: string; companyId: string | null }) {
+    await this.checkOwnership(id, user);
     if (dto.devAddr) dto.devAddr = dto.devAddr.toLowerCase();
     const doc = await this.model.findByIdAndUpdate(id, dto, { new: true }).exec();
     if (!doc) throw new NotFoundException('End device not found');
@@ -49,12 +62,14 @@ export class EndDevicesService {
 
     return doc;
   }
-  async remove(id: string) {
+  async remove(id: string, user: { role: string; companyId: string | null }) {
+    await this.checkOwnership(id, user);
     const doc = await this.model.findByIdAndDelete(id).exec();
     if (!doc) throw new NotFoundException('End device not found');
   }
 
-  async deactivate(id: string) {
+  async deactivate(id: string, user: { role: string; companyId: string | null }) {
+    await this.checkOwnership(id, user);
     const doc = await this.model.findByIdAndUpdate(id, {
       $set: { disabled: true, status: 'inactive', fCntUp: 0, fCntDown: 0, connectedGateways: [] },
       $unset: { devAddr: 1, appSKey: 1, nwkSKey: 1, fNwkSIntKey: 1, sNwkSIntKey: 1, nwkSEncKey: 1, sessionStart: 1 },
@@ -63,7 +78,8 @@ export class EndDevicesService {
     return doc;
   }
 
-  async activate(id: string) {
+  async activate(id: string, user: { role: string; companyId: string | null }) {
+    await this.checkOwnership(id, user);
     const doc = await this.model.findByIdAndUpdate(id, {
       disabled: false,
       status: 'inactive',
@@ -90,9 +106,8 @@ export class EndDevicesService {
     }).exec();
   }
 
-  async sendDownlink(id: string, dto: SendDownlinkDto) {
-    const device = await this.model.findById(id).exec();
-    if (!device) throw new NotFoundException('End device not found');
+  async sendDownlink(id: string, dto: SendDownlinkDto, user: { role: string; companyId: string | null }) {
+    const device = await this.checkOwnership(id, user);
 
     const lastGatewayEUI = device.connectedGateways[device.connectedGateways.length - 1]?.gatewayEUI;
     const gateway = lastGatewayEUI ? await this.gatewaysService.findByEui(lastGatewayEUI) : null;
@@ -121,7 +136,8 @@ export class EndDevicesService {
     return { queued: true, devEUI: device.devEUI, fPort: dto.fPort };
   }
 
-  async updateShare(id: string, dto: UpdateShareDto) {
+  async updateShare(id: string, dto: UpdateShareDto, user: { role: string; companyId: string | null }) {
+    await this.checkOwnership(id, user);
     const update: any = {};
     if (dto.collaborators !== undefined) update.collaborators = dto.collaborators;
     if (dto.sharedCompanies !== undefined) update.sharedCompanies = dto.sharedCompanies;
