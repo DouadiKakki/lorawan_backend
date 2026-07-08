@@ -2,11 +2,14 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { EndDevice, EndDeviceDocument } from '../end-devices/schemas/end-device.schema';
 import { Company, CompanyDocument } from '../companies/schemas/company.schema';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class UsersService {
@@ -14,6 +17,9 @@ export class UsersService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(EndDevice.name) private endDeviceModel: Model<EndDeviceDocument>,
     @InjectModel(Company.name) private companyModel: Model<CompanyDocument>,
+    private mailService: MailService,
+    private jwtService: JwtService,
+    private config: ConfigService,
   ) {}
 
   private async appendDevicesCount(users: UserDocument[]): Promise<any[]> {
@@ -38,8 +44,17 @@ export class UsersService {
     const existing = await this.userModel.findOne({ email: dto.email.toLowerCase() });
     if (existing) throw new ConflictException('Email already in use');
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const user = new this.userModel({ ...dto, passwordHash });
-    return user.save();
+    const user = new this.userModel({ ...dto, passwordHash, status: 'pending' });
+    const saved = await user.save();
+
+    const token = this.jwtService.sign(
+      { sub: saved._id.toString(), type: 'email-confirm' },
+      { secret: this.config.get('JWT_SECRET'), expiresIn: '48h' },
+    );
+    const link = `${this.config.get('FRONTEND_URL')}/confirm?token=${token}`;
+    await this.mailService.sendConfirmationEmail(saved.email, saved.name, link);
+
+    return saved;
   }
 
   async findAll(): Promise<any[]> {

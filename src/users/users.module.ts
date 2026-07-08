@@ -5,6 +5,7 @@ import { UsersController } from './users.controller';
 import { User, UserSchema } from './schemas/user.schema';
 import { EndDevice, EndDeviceSchema } from '../end-devices/schemas/end-device.schema';
 import { Company, CompanySchema } from '../companies/schemas/company.schema';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { Company, CompanySchema } from '../companies/schemas/company.schema';
       { name: EndDevice.name, schema: EndDeviceSchema },
       { name: Company.name, schema: CompanySchema },
     ]),
+    MailModule,
   ],
   providers: [UsersService],
   controllers: [UsersController],
