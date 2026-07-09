@@ -125,7 +125,7 @@ describe('UsersService.findAll — company scoping and Super Admin visibility', 
       { _id: 'u2', name: 'Root Admin', role: 'Super Admin', companyId: 'root-id', toObject() { return this; } },
     ];
     userModel = {
-      find: jest.fn().mockReturnValue({ select: () => ({ exec: () => Promise.resolve(mockUsers) }) }),
+      find: jest.fn().mockReturnValue({ select: () => ({ populate: () => ({ exec: () => Promise.resolve(mockUsers) }) }) }),
     };
 
     const moduleRef = await Test.createTestingModule({

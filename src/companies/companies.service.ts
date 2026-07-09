@@ -17,6 +17,10 @@ export class CompaniesService {
 
   create(dto: CreateCompanyDto) { return new this.model(dto).save(); }
 
+  findAllPublic() {
+    return this.model.find({ status: 'active' }).select('_id name').exec();
+  }
+
   async findAll() {
     const companies = await this.model.find().lean().exec();
     const [gatewayCounts, deviceCounts] = await Promise.all([

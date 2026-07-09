@@ -24,14 +24,20 @@ export class UsersService {
   ) {}
 
   private async appendDevicesCount(users: UserDocument[]): Promise<any[]> {
-    const companyIds = [...new Set(users.map(u => u.companyId?.toString()).filter(Boolean))];
+    const resolveCompanyId = (u: UserDocument): string | undefined => {
+      const value = u.companyId as any;
+      if (!value) return undefined;
+      return (value._id ?? value).toString();
+    };
+    const companyIds = [...new Set(users.map(resolveCompanyId).filter(Boolean))] as string[];
     const companyCounts = new Map<string, number>();
     for (const companyId of companyIds) {
       const count = await this.endDeviceModel.countDocuments({ companyId }).exec();
       companyCounts.set(companyId, count);
     }
     return users.map(u => {
-      const devicesCount = u.companyId ? (companyCounts.get(u.companyId.toString()) ?? 0) : 0;
+      const companyId = resolveCompanyId(u);
+      const devicesCount = companyId ? (companyCounts.get(companyId) ?? 0) : 0;
       return { ...u.toObject(), devicesCount };
     });
   }
@@ -65,14 +71,14 @@ export class UsersService {
   async findAll(user: { role: string; companyId: string | null }): Promise<any[]> {
     const filter = { ...companyFilter(user) };
     if (user.role !== 'Super Admin') filter.role = { $ne: 'Super Admin' };
-    const users = await this.userModel.find(filter).select('-passwordHash').exec();
+    const users = await this.userModel.find(filter).select('-passwordHash').populate('companyId', 'name').exec();
     return this.appendDevicesCount(users);
   }
 
   async findOne(id: string, user: { role: string; companyId: string | null }): Promise<any> {
     const filter: any = { _id: id, ...companyFilter(user) };
     if (user.role !== 'Super Admin') filter.role = { $ne: 'Super Admin' };
-    const found = await this.userModel.findOne(filter).select('-passwordHash').exec();
+    const found = await this.userModel.findOne(filter).select('-passwordHash').populate('companyId', 'name').exec();
     if (!found) throw new NotFoundException('User not found');
     const [result] = await this.appendDevicesCount([found]);
     return result;
