@@ -37,6 +37,9 @@ export class EndDevicesService {
 
   create(dto: CreateEndDeviceDto) {
     if (dto.devAddr) dto.devAddr = dto.devAddr.toLowerCase();
+    if (dto.devEUI) dto.devEUI = dto.devEUI.toUpperCase();
+    if (dto.joinEUI) dto.joinEUI = dto.joinEUI.toUpperCase();
+    if (dto.appKey) dto.appKey = dto.appKey.toUpperCase();
     return new this.model(dto).save();
   }
   findAll(user: { role: string; companyId: string | null }) {
@@ -50,6 +53,9 @@ export class EndDevicesService {
   async update(id: string, dto: UpdateEndDeviceDto, user: { role: string; companyId: string | null }) {
     await this.checkOwnership(id, user);
     if (dto.devAddr) dto.devAddr = dto.devAddr.toLowerCase();
+    if (dto.devEUI) dto.devEUI = dto.devEUI.toUpperCase();
+    if (dto.joinEUI) dto.joinEUI = dto.joinEUI.toUpperCase();
+    if (dto.appKey) dto.appKey = dto.appKey.toUpperCase();
     const doc = await this.model.findByIdAndUpdate(id, dto, { new: true }).exec();
     if (!doc) throw new NotFoundException('End device not found');
 
@@ -176,20 +182,24 @@ export class EndDevicesService {
 
     const wasInactive = existing.status !== 'active';
 
-    await this.model.findOneAndUpdate(
-      { devAddr: devAddr.toLowerCase() },
-      { $pull: { connectedGateways: { gatewayEUI } } },
-    ).exec();
-    const update: any = {
-      lastSeen: new Date(),
-      rssi,
-      status: 'active',
-      $push: { connectedGateways: { gatewayEUI, rssi } },
-    };
-    if (fCntUp !== undefined) update.fCntUp = fCntUp;
+    const setFields: any = { lastSeen: new Date(), rssi, status: 'active' };
+    if (fCntUp !== undefined) setFields.fCntUp = fCntUp;
+
     const doc = await this.model.findOneAndUpdate(
       { devAddr: devAddr.toLowerCase() },
-      update,
+      [
+        {
+          $set: {
+            ...setFields,
+            connectedGateways: {
+              $concatArrays: [
+                { $filter: { input: '$connectedGateways', cond: { $ne: ['$$this.gatewayEUI', gatewayEUI] } } },
+                [{ gatewayEUI, rssi }],
+              ],
+            },
+          },
+        },
+      ],
       { new: true },
     ).exec();
     if (doc) {

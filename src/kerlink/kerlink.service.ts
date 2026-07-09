@@ -94,6 +94,7 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
 
     const gatewayEUI = msg.slice(4, 12).toString('hex').toUpperCase();
     this.logger.log(`PUSH_DATA from ${rinfo.address}:${rinfo.port} — gatewayEUI=${gatewayEUI}`);
+    this.downlinkService.registerGatewayPath(rinfo.address, rinfo.port, gatewayEUI);
 
     const ack = Buffer.alloc(4);
     ack.writeUInt8(version, 0);
@@ -213,7 +214,7 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
   private async handleJoinRequest(
     joinReq: { joinEUI: string; devEUI: string; devNonce: Buffer; mic: Buffer; raw: Buffer },
     pkt: any,
-    _gatewayEUI: string,
+    gatewayEUI: string,
   ) {
     this.logger.log(`OTAA Join Request — DevEUI=${joinReq.devEUI} JoinEUI=${joinReq.joinEUI}`);
 
@@ -270,7 +271,7 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
 
     this.logger.log(`Join: DevAddr=${devAddrHex} AppSKey=${appSKey.toString('hex').toUpperCase()}`);
 
-    this.sendJoinAccept(pkt, joinAcceptPhy);
+    this.sendJoinAccept(pkt, joinAcceptPhy, gatewayEUI);
   }
 
   private buildJoinAcceptPhy(joinKey: Buffer, joinNonce: Buffer, devAddrLE: Buffer): Buffer {
@@ -306,10 +307,10 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
     return Buffer.concat([cipher.update(block), cipher.final()]);
   }
 
-  private sendJoinAccept(pkt: any, phyPayload: Buffer) {
-    const gatewayDownlink = this.downlinkService.getGatewayPath();
+  private sendJoinAccept(pkt: any, phyPayload: Buffer, gatewayEUI: string) {
+    const gatewayDownlink = this.downlinkService.getGatewayPath(gatewayEUI);
     if (!gatewayDownlink) {
-      this.logger.warn('JoinAccept: no PULL_DATA gateway path available');
+      this.logger.warn(`JoinAccept: no PULL_DATA gateway path available for ${gatewayEUI}`);
       return;
     }
     if (typeof pkt.tmst !== 'number') {
@@ -319,7 +320,7 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
 
     const txpk = {
       imme: false,
-      tmst: pkt.tmst + 5_000_000,
+      tmst: (pkt.tmst + 5_000_000) % 4_294_967_296,
       freq: pkt.freq,
       rfch: 0,
       powe: 14,

@@ -10,25 +10,32 @@ export class KerlinkDownlinkService {
   private readonly logger = new Logger(KerlinkDownlinkService.name);
   private socket: dgram.Socket | null = null;
 
-  /** Last gateway that sent PULL_DATA — used to push downlinks (class C style, immediate) */
-  private gatewayDownlink: { address: string; port: number } | null = null;
+  /** Per-gateway PULL_DATA paths, keyed by gatewayEUI — used to push downlinks (class C style, immediate) */
+  private gatewayPaths = new Map<string, { address: string; port: number }>();
+  /** Most recent PULL_DATA path overall — fallback for join-accept when gatewayEUI isn't known yet */
+  private lastGatewayDownlink: { address: string; port: number } | null = null;
 
   registerSocket(socket: dgram.Socket) {
     this.socket = socket;
   }
 
-  registerGatewayPath(address: string, port: number) {
-    this.gatewayDownlink = { address, port };
+  registerGatewayPath(address: string, port: number, gatewayEUI?: string) {
+    const path = { address, port };
+    this.lastGatewayDownlink = path;
+    if (gatewayEUI) this.gatewayPaths.set(gatewayEUI, path);
   }
 
-  getGatewayPath() {
-    return this.gatewayDownlink;
+  getGatewayPath(gatewayEUI?: string) {
+    if (gatewayEUI) return this.gatewayPaths.get(gatewayEUI) ?? null;
+    return this.lastGatewayDownlink;
   }
 
-  /** Sends a LoRaWAN unconfirmed/confirmed data downlink to a device via the last known Kerlink gateway path. */
+  /** Sends a LoRaWAN unconfirmed/confirmed data downlink to a device via its gateway's Kerlink UDP path. */
   async sendDataDownlink(device: EndDeviceDocument, fPort: number, payload: Buffer, confirmed: boolean): Promise<void> {
     if (!this.socket) throw new Error('Kerlink UDP socket not initialized');
-    if (!this.gatewayDownlink) throw new Error('No Kerlink gateway path available (no recent PULL_DATA)');
+    const lastGatewayEUI = device.connectedGateways[device.connectedGateways.length - 1]?.gatewayEUI;
+    const gatewayDownlink = this.getGatewayPath(lastGatewayEUI) ?? this.getGatewayPath();
+    if (!gatewayDownlink) throw new Error('No Kerlink gateway path available (no recent PULL_DATA)');
     if (!device.devAddr || !device.nwkSKey || !device.appSKey) {
       throw new Error('Device missing session keys (devAddr/appSKey/nwkSKey) — not joined');
     }
@@ -75,7 +82,7 @@ export class KerlinkDownlinkService {
     down.writeUInt8(PKT_PULL_RESP, 3);
     json.copy(down, 4);
 
-    this.socket.send(down, this.gatewayDownlink.port, this.gatewayDownlink.address);
-    this.logger.log(`Data downlink sent to DevAddr=${device.devAddr} fCntDown=${fCntDown} via ${this.gatewayDownlink.address}:${this.gatewayDownlink.port}`);
+    this.socket.send(down, gatewayDownlink.port, gatewayDownlink.address);
+    this.logger.log(`Data downlink sent to DevAddr=${device.devAddr} fCntDown=${fCntDown} via ${gatewayDownlink.address}:${gatewayDownlink.port}`);
   }
 }
