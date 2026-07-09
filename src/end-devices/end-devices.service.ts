@@ -200,7 +200,7 @@ export class EndDevicesService {
           },
         },
       ],
-      { new: true },
+      { updatePipeline: true, returnDocument: 'after' },
     ).exec();
     if (doc) {
       this.eventsGateway.emitDeviceStatus(doc);
