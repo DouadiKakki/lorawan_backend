@@ -16,6 +16,7 @@ import { StorageModule } from './storage/storage.module';
 import { KerlinkModule } from './kerlink/kerlink.module';
 import { AppConfigModule } from './config/config.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { DownlinksModule } from './downlinks/downlinks.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     CompaniesModule,
     IntegrationsModule,
     UplinkMessagesModule,
+    DownlinksModule,
     MqttModule,
     WebsocketModule,
     StorageModule,

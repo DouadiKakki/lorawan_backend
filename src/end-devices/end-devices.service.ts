@@ -11,6 +11,7 @@ import { EventsGateway } from '../websocket/events.gateway';
 import { GatewaysService } from '../gateways/gateways.service';
 import { KerlinkDownlinkService } from '../kerlink/kerlink-downlink.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { DownlinksService } from '../downlinks/downlinks.service';
 import { companyFilter } from '../auth/company-scope.util';
 
 @Injectable()
@@ -22,6 +23,7 @@ export class EndDevicesService {
     private gatewaysService: GatewaysService,
     @Inject(forwardRef(() => KerlinkDownlinkService)) private kerlinkDownlinkService: KerlinkDownlinkService,
     private notificationsService: NotificationsService,
+    private downlinksService: DownlinksService,
   ) {}
 
   private async checkOwnership(id: string, user: { role: string; companyId: string | null }): Promise<EndDeviceDocument> {
@@ -121,6 +123,15 @@ export class EndDevicesService {
         dto.confirmed ?? false,
       );
       await this.model.findByIdAndUpdate(id, { $inc: { fCntDown: 1 } }).exec();
+      const downlink = await this.downlinksService.create({
+        deviceEUI: device.devEUI,
+        fPort: dto.fPort,
+        confirmed: dto.confirmed ?? false,
+        status: 'sent',
+        payload: Buffer.from(dto.payload, 'base64'),
+        sentAt: new Date(),
+      });
+      this.eventsGateway.emitDownlinkSent(downlink);
       return { queued: true, devEUI: device.devEUI, fPort: dto.fPort };
     }
 
@@ -134,6 +145,15 @@ export class EndDevicesService {
       ...(dto.retries !== undefined && { nFCntDown: dto.retries }),
     });
     this.mqttService.publish(topic, payload);
+    const downlink = await this.downlinksService.create({
+      deviceEUI: device.devEUI,
+      fPort: dto.fPort,
+      confirmed: dto.confirmed ?? false,
+      status: 'queued',
+      payload: Buffer.from(dto.payload, 'base64'),
+      sentAt: new Date(),
+    });
+    this.eventsGateway.emitDownlinkSent(downlink);
     return { queued: true, devEUI: device.devEUI, fPort: dto.fPort };
   }
 

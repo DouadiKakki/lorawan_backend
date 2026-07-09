@@ -48,4 +48,8 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   emitNotification(notification: any) {
     this.server.emit('notification.created', notification);
   }
+
+  emitDownlinkSent(downlink: any) {
+    this.server.emit('downlink.sent', downlink);
+  }
 }

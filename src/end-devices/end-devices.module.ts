@@ -8,6 +8,7 @@ import { WebsocketModule } from '../websocket/websocket.module';
 import { GatewaysModule } from '../gateways/gateways.module';
 import { KerlinkModule } from '../kerlink/kerlink.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { DownlinksModule } from '../downlinks/downlinks.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     GatewaysModule,
     forwardRef(() => KerlinkModule),
     NotificationsModule,
+    DownlinksModule,
   ],
   providers: [EndDevicesService],
   controllers: [EndDevicesController],
