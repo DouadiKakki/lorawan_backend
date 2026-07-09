@@ -55,7 +55,7 @@ export class CompaniesService {
     return doc;
   }
   async update(id: string, dto: UpdateCompanyDto) {
-    const doc = await this.model.findByIdAndUpdate(id, dto, { new: true }).exec();
+    const doc = await this.model.findByIdAndUpdate(id, dto, { returnDocument: 'after' }).exec();
     if (!doc) throw new NotFoundException('Company not found');
     return doc;
   }

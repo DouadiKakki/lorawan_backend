@@ -56,7 +56,7 @@ export class EndDevicesService {
     if (dto.devEUI) dto.devEUI = dto.devEUI.toUpperCase();
     if (dto.joinEUI) dto.joinEUI = dto.joinEUI.toUpperCase();
     if (dto.appKey) dto.appKey = dto.appKey.toUpperCase();
-    const doc = await this.model.findByIdAndUpdate(id, dto, { new: true }).exec();
+    const doc = await this.model.findByIdAndUpdate(id, dto, { returnDocument: 'after' }).exec();
     if (!doc) throw new NotFoundException('End device not found');
 
     if (dto.battery !== undefined && dto.battery < 20) {
@@ -82,7 +82,7 @@ export class EndDevicesService {
     const doc = await this.model.findByIdAndUpdate(id, {
       $set: { disabled: true, status: 'inactive', fCntUp: 0, fCntDown: 0, connectedGateways: [] },
       $unset: { devAddr: 1, appSKey: 1, nwkSKey: 1, fNwkSIntKey: 1, sNwkSIntKey: 1, nwkSEncKey: 1, sessionStart: 1 },
-    }, { new: true }).exec();
+    }, { returnDocument: 'after' }).exec();
     if (!doc) throw new NotFoundException('End device not found');
     return doc;
   }
@@ -92,7 +92,7 @@ export class EndDevicesService {
     const doc = await this.model.findByIdAndUpdate(id, {
       disabled: false,
       status: 'inactive',
-    }, { new: true }).exec();
+    }, { returnDocument: 'after' }).exec();
     if (!doc) throw new NotFoundException('End device not found');
     return doc;
   }
@@ -168,7 +168,7 @@ export class EndDevicesService {
     const update: any = {};
     if (dto.collaborators !== undefined) update.collaborators = dto.collaborators;
     if (dto.sharedCompanies !== undefined) update.sharedCompanies = dto.sharedCompanies;
-    const doc = await this.model.findByIdAndUpdate(id, update, { new: true })
+    const doc = await this.model.findByIdAndUpdate(id, update, { returnDocument: 'after' })
       .populate('applicationId', 'name')
       .populate('companyId', 'name')
       .exec();

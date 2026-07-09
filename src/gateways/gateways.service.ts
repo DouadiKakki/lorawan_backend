@@ -84,7 +84,7 @@ export class GatewaysService {
       throw new NotFoundException('Gateway not found');
     }
     if (dto.eui) dto.eui = dto.eui.toUpperCase();
-    const doc = await this.model.findByIdAndUpdate(id, dto, { new: true }).exec();
+    const doc = await this.model.findByIdAndUpdate(id, dto, { returnDocument: 'after' }).exec();
     if (!doc) throw new NotFoundException('Gateway not found');
     return doc;
   }
@@ -106,7 +106,7 @@ export class GatewaysService {
     await this.model.findOneAndUpdate(
       { eui },
       { latitude: lati, longitude: long, altitude: alti, locationType: 'inherited' },
-      { new: true },
+      { returnDocument: 'after' },
     ).exec();
   }
 
@@ -117,7 +117,7 @@ export class GatewaysService {
     const updated = await this.model.findOneAndUpdate(
       { eui },
       { status: 'online', lastSeen: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     ).exec();
 
     if (existing.status === 'offline') {

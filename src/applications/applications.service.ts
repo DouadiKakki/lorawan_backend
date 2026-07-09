@@ -36,7 +36,7 @@ export class ApplicationsService {
     if (user.role !== 'Super Admin' && existing.companyId?.toString() !== user.companyId) {
       throw new NotFoundException('Application not found');
     }
-    const doc = await this.model.findByIdAndUpdate(id, dto, { new: true }).exec();
+    const doc = await this.model.findByIdAndUpdate(id, dto, { returnDocument: 'after' }).exec();
     if (!doc) throw new NotFoundException('Application not found');
     return doc;
   }

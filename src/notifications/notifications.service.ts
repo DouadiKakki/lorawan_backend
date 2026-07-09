@@ -17,7 +17,7 @@ export class NotificationsService {
   }
 
   async markRead(id: string) {
-    const doc = await this.model.findByIdAndUpdate(id, { read: true }, { new: true }).exec();
+    const doc = await this.model.findByIdAndUpdate(id, { read: true }, { returnDocument: 'after' }).exec();
     if (!doc) throw new NotFoundException('Notification not found');
     return doc;
   }

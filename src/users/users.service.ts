@@ -96,7 +96,7 @@ export class UsersService {
       update.passwordHash = await bcrypt.hash(dto.password, 10);
       delete update.password;
     }
-    const updated = await this.userModel.findByIdAndUpdate(id, update, { new: true }).select('-passwordHash').exec();
+    const updated = await this.userModel.findByIdAndUpdate(id, update, { returnDocument: 'after' }).select('-passwordHash').exec();
     if (!updated) throw new NotFoundException('User not found');
     return updated;
   }
