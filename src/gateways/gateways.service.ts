@@ -102,6 +102,14 @@ export class GatewaysService {
     return this.model.findOne({ eui }).exec();
   }
 
+  async updateLocationFromStat(eui: string, lati: number, long: number, alti = 0): Promise<void> {
+    await this.model.findOneAndUpdate(
+      { eui },
+      { latitude: lati, longitude: long, altitude: alti, locationType: 'inherited' },
+      { new: true },
+    ).exec();
+  }
+
   async markSeen(eui: string) {
     const existing = await this.model.findOne({ eui }).exec();
     if (!existing) return;

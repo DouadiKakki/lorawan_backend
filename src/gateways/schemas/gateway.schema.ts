@@ -18,6 +18,7 @@ export class Gateway {
   @Prop({ default: 'Unknown' }) placement: string;
   @Prop({ default: 'manual', enum: ['manual', 'inherited'] }) locationType: string;
   @Prop({ default: 'chirpstack', enum: ['chirpstack', 'kerlink'] }) protocol: string;
+  @Prop({ enum: ['Kerlink', 'Tektelic', 'Milesight', 'Other'] }) brand: string;
 }
 
 export const GatewaySchema = SchemaFactory.createForClass(Gateway);

@@ -13,4 +13,5 @@ export class CreateGatewayDto {
   @IsOptional() @IsString() placement?: string;
   @IsOptional() @IsEnum(['manual', 'inherited']) locationType?: string;
   @IsOptional() @IsEnum(['chirpstack', 'kerlink']) protocol?: string;
+  @IsOptional() @IsEnum(['Kerlink', 'Tektelic', 'Milesight', 'Other']) brand?: string;
 }

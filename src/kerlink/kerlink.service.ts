@@ -113,6 +113,12 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    if (data.stat && typeof data.stat.lati === 'number' && typeof data.stat.long === 'number') {
+      this.gatewaysService.updateLocationFromStat(gatewayEUI, data.stat.lati, data.stat.long, data.stat.alti).catch(err =>
+        this.logger.warn(`updateLocationFromStat failed for ${gatewayEUI}: ${err.message}`),
+      );
+    }
+
     if (!Array.isArray(data.rxpk)) return;
 
     for (const pkt of data.rxpk) {
