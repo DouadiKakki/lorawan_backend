@@ -49,4 +49,15 @@ describe('MailService', () => {
     const result = await service.sendConfirmationEmail('user@test.com', 'Jane', 'http://app/confirm?token=xyz');
     expect(result).toBe(false);
   });
+
+  it('sends a password reset email with the link in the body', async () => {
+    const result = await service.sendPasswordResetEmail('user@test.com', 'Jane', 'http://app/reset-password?token=xyz');
+    expect(result).toBe(true);
+    expect(sendMailMock).toHaveBeenCalledWith(expect.objectContaining({
+      to: 'user@test.com',
+      from: 'TeleNavix <noreply@example.com>',
+      subject: expect.stringContaining('Reset'),
+      html: expect.stringContaining('http://app/reset-password?token=xyz'),
+    }));
+  });
 });

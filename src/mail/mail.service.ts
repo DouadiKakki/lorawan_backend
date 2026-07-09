@@ -40,4 +40,11 @@ export class MailService {
     const html = `<p>Hi ${name},</p><p>Confirm your account (valid for 48 hours):</p><p><a href="${link}">${link}</a></p>`;
     return this.sendEmail(email, subject, text, html);
   }
+
+  async sendPasswordResetEmail(email: string, name: string, link: string): Promise<boolean> {
+    const subject = 'Reset your password';
+    const text = `Hi ${name}, reset your password within 1 hour: ${link}`;
+    const html = `<p>Hi ${name},</p><p>Reset your password (valid for 1 hour):</p><p><a href="${link}">${link}</a></p>`;
+    return this.sendEmail(email, subject, text, html);
+  }
 }

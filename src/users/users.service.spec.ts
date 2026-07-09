@@ -153,3 +153,56 @@ describe('UsersService.findAll — company scoping and Super Admin visibility', 
     expect(userModel.find).toHaveBeenCalledWith({});
   });
 });
+
+describe('UsersService bulk actions', () => {
+  let service: UsersService;
+  let userModel: any;
+  let mailService: { sendPasswordResetEmail: jest.Mock };
+  let jwtService: { sign: jest.Mock };
+
+  beforeEach(async () => {
+    const docs: Record<string, any> = {
+      'u1': { _id: 'u1', email: 'a@test.com', name: 'A', companyId: { toString: () => 'company-a' } },
+      'u2': { _id: 'u2', email: 'b@test.com', name: 'B', companyId: { toString: () => 'company-b' } },
+    };
+    userModel = {
+      findById: jest.fn((id: string) => ({ exec: () => Promise.resolve(docs[id] ?? null) })),
+      findByIdAndDelete: jest.fn().mockReturnValue({ exec: () => Promise.resolve(true) }),
+      findByIdAndUpdate: jest.fn().mockReturnValue({ exec: () => Promise.resolve(true) }),
+    };
+    mailService = { sendPasswordResetEmail: jest.fn().mockResolvedValue(true) };
+    jwtService = { sign: jest.fn().mockReturnValue('token') };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        UsersService,
+        { provide: getModelToken(User.name), useValue: userModel },
+        { provide: getModelToken(EndDevice.name), useValue: {} },
+        { provide: getModelToken(Company.name), useValue: {} },
+        { provide: MailService, useValue: mailService },
+        { provide: JwtService, useValue: jwtService },
+        { provide: ConfigService, useValue: { get: () => 'x' } },
+      ],
+    }).compile();
+
+    service = moduleRef.get(UsersService);
+  });
+
+  it('bulkDelete succeeds for same-company users and fails for other-company users when requester is not Super Admin', async () => {
+    const result = await service.bulkDelete(['u1', 'u2'], { role: 'admin', companyId: 'company-a' });
+    expect(result.succeeded).toEqual(['u1']);
+    expect(result.failed).toEqual([{ id: 'u2', reason: 'User not found' }]);
+  });
+
+  it('bulkDelete succeeds for all ids when requester is Super Admin', async () => {
+    const result = await service.bulkDelete(['u1', 'u2'], { role: 'Super Admin', companyId: 'root-id' });
+    expect(result.succeeded).toEqual(['u1', 'u2']);
+    expect(result.failed).toEqual([]);
+  });
+
+  it('bulkResetPassword sends an email for each succeeded id', async () => {
+    const result = await service.bulkResetPassword(['u1'], { role: 'admin', companyId: 'company-a' });
+    expect(result.succeeded).toEqual(['u1']);
+    expect(mailService.sendPasswordResetEmail).toHaveBeenCalledWith('a@test.com', 'A', expect.stringContaining('token'));
+  });
+});

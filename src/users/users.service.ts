@@ -82,18 +82,22 @@ export class UsersService {
     return this.userModel.findOne({ email: email.toLowerCase() }).exec();
   }
 
-  async update(id: string, dto: UpdateUserDto): Promise<UserDocument> {
+  async update(id: string, dto: UpdateUserDto, user: { role: string; companyId: string | null }): Promise<UserDocument> {
+    const existing = await this.checkOwnership(id, user);
+    if (!existing) throw new NotFoundException('User not found');
     const update: any = { ...dto };
     if (dto.password) {
       update.passwordHash = await bcrypt.hash(dto.password, 10);
       delete update.password;
     }
-    const user = await this.userModel.findByIdAndUpdate(id, update, { new: true }).select('-passwordHash').exec();
-    if (!user) throw new NotFoundException('User not found');
-    return user;
+    const updated = await this.userModel.findByIdAndUpdate(id, update, { new: true }).select('-passwordHash').exec();
+    if (!updated) throw new NotFoundException('User not found');
+    return updated;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, user: { role: string; companyId: string | null }): Promise<void> {
+    const existing = await this.checkOwnership(id, user);
+    if (!existing) throw new NotFoundException('User not found');
     const result = await this.userModel.findByIdAndDelete(id).exec();
     if (!result) throw new NotFoundException('User not found');
   }
@@ -105,5 +109,59 @@ export class UsersService {
   async confirmEmail(id: string): Promise<void> {
     const user = await this.userModel.findByIdAndUpdate(id, { status: 'active' }).exec();
     if (!user) throw new NotFoundException('User not found');
+  }
+
+  async setPasswordHash(id: string, newPassword: string): Promise<void> {
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const user = await this.userModel.findByIdAndUpdate(id, { passwordHash }).exec();
+    if (!user) throw new NotFoundException('User not found');
+  }
+
+  private async checkOwnership(id: string, user: { role: string; companyId: string | null }): Promise<UserDocument | null> {
+    const doc = await this.userModel.findById(id).exec();
+    if (!doc) return null;
+    if (user.role !== 'Super Admin' && doc.companyId?.toString() !== user.companyId) return null;
+    return doc;
+  }
+
+  async bulkDelete(ids: string[], user: { role: string; companyId: string | null }) {
+    const succeeded: string[] = [];
+    const failed: { id: string; reason: string }[] = [];
+    for (const id of ids) {
+      const doc = await this.checkOwnership(id, user);
+      if (!doc) { failed.push({ id, reason: 'User not found' }); continue; }
+      await this.userModel.findByIdAndDelete(id).exec();
+      succeeded.push(id);
+    }
+    return { succeeded, failed };
+  }
+
+  async bulkDeactivate(ids: string[], user: { role: string; companyId: string | null }) {
+    const succeeded: string[] = [];
+    const failed: { id: string; reason: string }[] = [];
+    for (const id of ids) {
+      const doc = await this.checkOwnership(id, user);
+      if (!doc) { failed.push({ id, reason: 'User not found' }); continue; }
+      await this.userModel.findByIdAndUpdate(id, { status: 'inactive' }).exec();
+      succeeded.push(id);
+    }
+    return { succeeded, failed };
+  }
+
+  async bulkResetPassword(ids: string[], user: { role: string; companyId: string | null }) {
+    const succeeded: string[] = [];
+    const failed: { id: string; reason: string }[] = [];
+    for (const id of ids) {
+      const doc = await this.checkOwnership(id, user);
+      if (!doc) { failed.push({ id, reason: 'User not found' }); continue; }
+      const token = this.jwtService.sign(
+        { sub: doc._id.toString(), type: 'password-reset' },
+        { secret: this.config.get('JWT_SECRET'), expiresIn: '1h' },
+      );
+      const link = `${this.config.get('FRONTEND_URL')}/reset-password?token=${token}`;
+      await this.mailService.sendPasswordResetEmail(doc.email, doc.name, link);
+      succeeded.push(id);
+    }
+    return { succeeded, failed };
   }
 }
