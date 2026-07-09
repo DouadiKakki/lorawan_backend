@@ -414,7 +414,7 @@ export class KerlinkService implements OnModuleInit, OnModuleDestroy {
   // ─── Helpers ──────────────────────────────────────────────────────────────────
 
   private getRssi(pkt: any): number | null {
-    const v = pkt.rssi ?? pkt.rsig ?? pkt.rssis;
+    const v = pkt.rssi ?? pkt.rssis ?? pkt.rsig?.[0]?.rssic ?? pkt.rsig?.[0]?.rssis;
     return typeof v === 'number' && !Number.isNaN(v) ? v : null;
   }
 
