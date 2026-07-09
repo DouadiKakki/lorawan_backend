@@ -5,12 +5,14 @@ import { CompaniesController } from './companies.controller';
 import { Company, CompanySchema } from './schemas/company.schema';
 import { Gateway, GatewaySchema } from '../gateways/schemas/gateway.schema';
 import { EndDevice, EndDeviceSchema } from '../end-devices/schemas/end-device.schema';
+import { User, UserSchema } from '../users/schemas/user.schema';
 
 @Module({
   imports: [MongooseModule.forFeature([
     { name: Company.name, schema: CompanySchema },
     { name: Gateway.name, schema: GatewaySchema },
     { name: EndDevice.name, schema: EndDeviceSchema },
+    { name: User.name, schema: UserSchema },
   ])],
   providers: [CompaniesService],
   controllers: [CompaniesController],
